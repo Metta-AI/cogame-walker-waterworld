@@ -1760,3 +1760,13 @@ and the grid it came from are recorded in `tools/ci/baseline_tuning.json`, and
 the pick is a cell the grid actually covered. This is the note working as intended (§Baselines
 says the sweep moves these three numbers), but the note's literals are stale and the tree's are
 authoritative.
+
+### `config_schema` carries one key the note's enumeration omits: `speed`
+
+`sim_config.update` reads `speed` (`sim_config.nim:119`, an inherited playback-speed field, range
+1..16, default 1, read by nothing else in the tree), and `tests/test_manifest.nim` asserts that
+`game.config_schema` covers **every** field `update` reads. So the key has to be declared, and
+`coworld_manifest_template.json` declares it. The note's §Manifest enumeration simply does not
+list it: the manifest is the consistent one. The key is left in place rather than deleted because
+removing a config field the starter's loader also reads is a change to the config contract, not a
+documentation fix.
