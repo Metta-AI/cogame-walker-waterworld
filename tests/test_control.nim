@@ -250,6 +250,7 @@ block rockTangentNeverSteersIn:
   var ctl = initControlState()
   var rng = initRand(555)
   var clipping = 0
+  var worst = -2.0
   for q in 0 ..< PoisonCount:
     sim.poison[q].state = psRespawning
   for f in 0 ..< FoodCount:
@@ -303,13 +304,28 @@ block rockTangentNeverSteersIn:
       toRockY = int64(RockCentreY) - int64(sim.skimmers[0].y)
       dot = toRockX * int64(DirQ12[int(decoded.dir)].x) +
         toRockY * int64(DirQ12[int(decoded.dir)].y)
-      # The steering is quantised to 32 directions, so a tangent lands within
-      # 5.6 deg of perpendicular: assert the ANGLE stays well off the rock
-      # (a cosine under 0.35 is more than 69 deg away) rather than a bare sign.
-      bound = int64(0.35 * sqrt(float(toRockX * toRockX + toRockY * toRockY)) *
+      # `dot / (|toRock| * Q12)` IS the cosine of the angle between the thrust
+      # and the rock, so the bound below is an angle. The velocity is zeroed
+      # above, so the accel vector IS the steer vector and the only error
+      # between a perfect tangent (cosine 0) and the byte is quantisation:
+      #   * half a step of the 32-direction table:          5.625 deg
+      #   * nearestDirIndex maximises the dot against the ROUNDED table, whose
+      #     entry lengths differ by up to 1 part in 4096, which shifts the
+      #     sector boundary by (2.2e-4)/(2*tan 5.625 deg):   0.064 deg
+      #   * `micro()` truncates the accel to whole µm and level >= 1 needs
+      #     |a| >= 372 µm, so at worst atan(sqrt(2)/372):    0.218 deg
+      # sin(5.907 deg) = 0.1030, and |DirQ12| <= 4096.5 inflates the measured
+      # cosine by a further 1.0002 — so 0.11 is the tolerance the arithmetic
+      # supports. The worst cosine actually observed over these 10 000 goals is
+      # 0.0991 (echoed below), i.e. 5.69 deg off perpendicular.
+      bound = int64(0.11 * sqrt(float(toRockX * toRockX + toRockY * toRockY)) *
         float(Q12))
+    worst = max(worst, float(dot) /
+      (sqrt(float(toRockX * toRockX + toRockY * toRockY)) * float(Q12)))
     check("the tangent rule never thrusts into the rock", dot < bound,
       $dot & " vs " & $bound)
+  echo "rock tangent: worst cosine toward the rock ", worst, " over ",
+    clipping, " clipping goals"
   check("the sweep actually exercised the rock rule", clipping > 200, $clipping)
 
 if failures > 0:
