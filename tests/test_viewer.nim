@@ -133,6 +133,65 @@ block legibleAt360:
   check("the ray legend goes at 360 px",
     "#stage.tiny #ww-legend" in page)
 
+block rendererFixtureStillTestsTheCaps:
+  ## tools/ci/renderer_fixture.html is the ONLY thing in CI that ever renders a
+  ## full-cap LLM `say`/`note` (docker_smoke.sh has no API key, so every seat
+  ## there is a scripted baseline with short fixed lines). It self-checks its own
+  ## string lengths in the browser, which means a MaxSayRunes/MaxNoteRunes bump
+  ## turns the fixture red instead of quietly rendering a short string — but only
+  ## after a full wasm build. Catch it here, at the source of truth.
+  let fixture = readRepoFile("tools/ci/renderer_fixture.html")
+
+  proc jsRuneLen(literal: string): int =
+    ## Rune length of a single-quoted JS string literal, or of several joined by
+    ## `+`. Decodes \uXXXX; a surrogate PAIR is ONE rune, which is the whole
+    ## point of the emoji in the fixture.
+    var i = 0
+    var highSurrogate = false
+    while i < literal.len:
+      case literal[i]
+      of '\'':
+        # Skip everything between the closing quote and the next opening one
+        # (the `' +\n    '` join and its indentation).
+        inc i
+        while i < literal.len and literal[i] != '\'': inc i
+        inc i
+      of '\\':
+        if i + 5 < literal.len and literal[i + 1] == 'u':
+          let cp = parseHexInt(literal[i + 2 .. i + 5])
+          if cp >= 0xD800 and cp <= 0xDBFF:
+            highSurrogate = true
+            inc result
+          elif cp >= 0xDC00 and cp <= 0xDFFF and highSurrogate:
+            highSurrogate = false   # the pair already counted as one rune
+          else:
+            inc result
+          i += 6
+        else:
+          inc result
+          i += 2
+      else:
+        highSurrogate = false
+        inc result
+        inc i
+
+  proc fixtureLiteral(name: string): string =
+    let start = fixture.find("var " & name & " = ")
+    doAssert start >= 0, name & " is missing from the fixture"
+    let quoteAt = fixture.find('\'', start)
+    let stop = fixture.find(";\n", quoteAt)
+    fixture[quoteAt + 1 ..< stop]
+
+  check("the fixture's say is exactly MaxSayRunes",
+    jsRuneLen(fixtureLiteral("SAY")) == MaxSayRunes,
+    $jsRuneLen(fixtureLiteral("SAY")) & " != " & $MaxSayRunes)
+  check("the fixture's note is exactly MaxNoteRunes",
+    jsRuneLen(fixtureLiteral("NOTE")) == MaxNoteRunes,
+    $jsRuneLen(fixtureLiteral("NOTE")) & " != " & $MaxNoteRunes)
+  check("the fixture names the caps it is pinned to",
+    ($MaxSayRunes & "-rune cap") in fixture and
+      ($MaxNoteRunes & "-rune cap") in fixture)
+
 block boardAspect:
   check("the page derives the fixed tank's aspect from the stream",
     "var BOARD_W = 1200, BOARD_H = 800;" in page)
