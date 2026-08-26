@@ -192,6 +192,29 @@ block rendererFixtureStillTestsTheCaps:
     ($MaxSayRunes & "-rune cap") in fixture and
       ($MaxNoteRunes & "-rune cap") in fixture)
 
+block bubblesStayOnTheBoard:
+  ## The speech-bubble pill is centred on one of three fixed slots and sized
+  ## from the text, so a full-cap `say` of wide glyphs is what runs off the
+  ## edge. The slot centre is clamped by the sprite's own width; these are the
+  ## edge cases of that clamp.
+  const Slots = 3
+  let narrow = bubbleSlotX(0, Slots, 200)
+  check("a narrow pill sits on its slot centre", narrow == BoardW div 6,
+    $narrow)
+  for width in [200, 600, 980, BoardW - 2, BoardW, BoardW * 2]:
+    for slot in 0 ..< Slots:
+      let cx = bubbleSlotX(slot, Slots, width)
+      let left = cx - width div 2
+      let right = cx + width div 2
+      if width <= BoardW:
+        check("a " & $width & " px pill in slot " & $slot &
+          " never crosses the left edge", left >= 0, $left)
+        check("a " & $width & " px pill in slot " & $slot &
+          " never crosses the right edge", right <= BoardW, $right)
+      else:
+        check("a pill wider than the board is centred, not pushed off",
+          cx == BoardW div 2, $cx)
+
 block boardAspect:
   check("the page derives the fixed tank's aspect from the stream",
     "var BOARD_W = 1200, BOARD_H = 800;" in page)

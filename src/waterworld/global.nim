@@ -600,6 +600,18 @@ proc addFx(
         ZFx, text.id, text.w, text.h)
     inc slot
 
+proc bubbleSlotX*(slot, slots, spriteW: int): int =
+  ## The centre x of one bubble slot, CLAMPED so a wide pill cannot hang off
+  ## either edge of the board. `place()` subtracts half the sprite width, and a
+  ## canvas accepts a negative coordinate without complaint, so an unclamped
+  ## centre is how a full-cap `say` becomes an invisible sliver. The clamp is
+  ## the reason this does not depend on the font's advance widths.
+  let centre = BoardW * (slot * 2 + 1) div (slots * 2)
+  if spriteW >= BoardW:
+    BoardW div 2
+  else:
+    clamp(centre, spriteW div 2, BoardW - spriteW div 2)
+
 proc addBubbles(
   packet: var seq[uint8], ids: var seq[int], state: var GlobalViewerState,
   sim: SimServer
@@ -617,7 +629,7 @@ proc addBubbles(
       tint = SkimmerTints[clamp(int(bubble.skimmer), 0, SkimmerCount - 1)]
       sprite = packet.bubbleSpriteIdFor(state, bubble.text, tint)
       slots = 3
-      cx = BoardW * (slot * 2 + 1) div (slots * 2)
+      cx = bubbleSlotX(slot, slots, sprite.w)
     packet.place(ids, ObjBubbleBase + slot, cx, bandY, ZBubble,
       sprite.id, sprite.w, sprite.h)
     inc slot
