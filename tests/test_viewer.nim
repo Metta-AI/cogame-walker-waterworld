@@ -229,10 +229,22 @@ block boardAspect:
     $predictedViewerRenderBytes(MapWidth, MapHeight))
 
 block broadcastCoreIsTheStarters:
-  ## broadcast_core.js differs from the starter's copy in the WATERWORLD_WIRE
-  ## identifier and one source-path comment, and nothing else.
+  ## broadcast_core.js differs from coworld-ctf's copy in EXACTLY TWO places,
+  ## and both of them are pinned here so neither can drift unnoticed:
+  ##   1. line 49, the wire-constants global, renamed with the game;
+  ##   2. line 268, a comment naming the module the packet's state comes from,
+  ##      which had to move because `src/ctf/sim.nim` does not exist here (and
+  ##      because the `ctf_` sweep at the bottom of this file forbids it).
+  ## The starter is not on the CI runner, so this is a two-sided assertion:
+  ## the waterworld text is present and the starter's text is gone.
   check("the core reads WATERWORLD_WIRE",
     "window.WATERWORLD_WIRE && window.WATERWORLD_WIRE.chromeSpriteId" in core)
+  check("and no longer reads the starter's global",
+    "window.CTF_WIRE" notin core)
+  check("the packet-state comment names this game's module",
+    "in src/waterworld/sim_types.nim) and a packet is one such state" in core)
+  check("and not the starter's",
+    "in src/ctf/sim.nim" notin core)
   check("the core still keys the chrome sprite at 4090", "|| 4090;" in core)
   check("the core keeps its zoom/pan code, simply never driven",
     "function zoomAt(factor, cssX, cssY)" in core)

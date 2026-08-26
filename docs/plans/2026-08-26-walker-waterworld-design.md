@@ -1676,3 +1676,14 @@ asserts:
   touches it, and — for non-vacuity — that 0 m does eat it.
 - **Beside the path.** With the bloom 0.55 m off the line, a wider standoff strictly holds the
   skimmer farther off, and 1.8 m already clears the contact radius.
+
+### `broadcast_core.js` differs from the starter in TWO places, not one
+
+The note says `broadcast_core.js` "differs from the starter's copy in **exactly** the
+`WATERWORLD_WIRE` identifier". There is a second difference, forced by this repo's own rules: the
+comment at line 268 names `src/waterworld/sim_types.nim` where the starter names `src/ctf/sim.nim`,
+because that module does not exist here and because `tests/test_viewer.nim`'s `ctf_` sweep forbids
+the string. Both deltas are now pinned two-sidedly in `test_viewer.nim`'s
+`broadcastCoreIsTheStarters` block (the waterworld text present, the starter's text absent).
+Nothing else in the file differs — `diff` against `coworld-ctf/client/broadcast_core.js` reports
+exactly those two lines.
