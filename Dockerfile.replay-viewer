@@ -7,8 +7,12 @@
 # container runs as linux/amd64.
 FROM emscripten/emsdk:4.0.15 AS replay-viewer-builder
 
+# gcc/libc6-dev are for the ONE native compile in this image: the wire-constants
+# generator below runs on the host arch so the emitted JS is the same constants
+# the wasm module was compiled with. Everything else here targets wasm32.
 RUN apt-get update && \
-  apt-get install -y --no-install-recommends ca-certificates curl git && \
+  apt-get install -y --no-install-recommends \
+    ca-certificates curl git gcc libc6-dev && \
   rm -rf /var/lib/apt/lists/* && \
   curl -fsSL \
     -o /usr/local/bin/nimby \
@@ -25,7 +29,8 @@ RUN nimby --global sync nimby.lock
 
 COPY . .
 RUN nim c -d:emscripten replay-viewer/waterworld_replay.nim && \
-  nim c -r --hints:off -o:/tmp/gen_wire_constants tools/gen_wire_constants.nim \
+  nim c -r --hints:off --path:src -o:/tmp/gen_wire_constants \
+    tools/gen_wire_constants.nim \
     > replay-viewer/dist/wire_constants.js && \
   cp client/broadcast_core.js replay-viewer/dist/broadcast_core.js && \
   cp client/chrome_common.js replay-viewer/dist/chrome_common.js && \
