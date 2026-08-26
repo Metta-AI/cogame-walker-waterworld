@@ -1,0 +1,330 @@
+
+<!-- ============================================================
+     WALKER-WATERWORLD additions to the inherited coworld-ctf chrome
+     ============================================================
+     Everything ABOVE this banner is the starter's broadcast page, edited only
+     where the game demands and always behind WW_MODE (which latches on the
+     first frame carrying the `ww` tank block): the scorebug plates' CONTENTS,
+     the feed and beat routing, and the endcard's stat columns. The removed
+     starter elements are exactly the ones the design note names — #viewpanel
+     and its children, #fpv and its children, and #povBadge — because the tank
+     is fixed and the 1200x800 board always fits the frame, so there is nothing
+     off-screen to locate. broadcast_core.js keeps its zoom/pan code verbatim.
+
+     NOTHING HERE TOUCHES THE TRANSPORT BAND. relayout() still owns --hudscale,
+     --topband and --band on :root; the endcard still stops at
+     bottom: var(--band, 0px) and is still dismissed by every seek; and every
+     scrubber beat this block draws is a LABELLED, CLICKABLE BUTTON that seeks
+     on click, styled for EVERY kind the sim emits — capture, poison,
+     target_met and gameover. The builder carries a ww- prefix precisely so it
+     can never be shadowed by the chrome alias block's own hoisted declaration
+     of the shared one (`var markBeat = C.markBeat`).
+     ============================================================ -->
+<style>
+/* --- scorebug: the pod plate and the objective plate ------------------- */
+/* The plate name must survive a 360px featured-match iframe: it grows into
+   whatever room the plate has and ellipsises only when it genuinely runs out,
+   never collapsing to a bare "…". */
+.plate-name {
+  flex: 1 1 auto;
+  min-width: 3.2em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.plate .ww-score {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: calc(19 * var(--u));
+  letter-spacing: 0.01em;
+}
+.plate .ww-score.up { color: var(--green, #45a85e); }
+.plate .ww-score.down { color: var(--red, #e0523a); }
+.plate .ww-sub {
+  display: flex;
+  gap: calc(6 * var(--u));
+  align-items: center;
+  font-size: calc(9 * var(--u));
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--paper-dim, rgba(242, 232, 216, 0.66));
+}
+.ww-obj {
+  display: flex;
+  flex-direction: column;
+  gap: calc(3 * var(--u));
+  min-width: calc(96 * var(--u));
+}
+.ww-obj .ww-caught {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: calc(17 * var(--u));
+  color: var(--amber, #e8a33d);
+}
+.ww-bar {
+  display: flex;
+  gap: calc(2 * var(--u));
+  height: calc(6 * var(--u));
+}
+.ww-bar i {
+  flex: 1 1 auto;
+  background: rgba(242, 232, 216, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(242, 232, 216, 0.22);
+}
+.ww-bar i.on { background: var(--amber, #e8a33d); box-shadow: none; }
+
+/* --- the sensor-ray legend, in the banner lane for the first 5 s -------- */
+#ww-legend {
+  display: none;
+  gap: calc(10 * var(--u));
+  align-items: center;
+  padding: calc(3 * var(--u)) calc(8 * var(--u));
+  background: rgba(11, 7, 4, 0.62);
+  font-size: calc(9 * var(--u));
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--paper-dim, rgba(242, 232, 216, 0.7));
+}
+#ww-legend.on { display: flex; }
+#ww-legend span { display: inline-flex; align-items: center; gap: calc(4 * var(--u)); }
+#ww-legend i {
+  width: calc(7 * var(--u));
+  height: calc(7 * var(--u));
+  border-radius: 50%;
+}
+#ww-legend i.food { background: #8cf0a8; }
+#ww-legend i.poison { background: #d048a8; }
+#ww-legend i.cog { background: #f2e8d8; }
+#ww-legend i.rock { background: #968e82; }
+
+/* --- feed rows --------------------------------------------------------- */
+.feed-row.ww-catch { box-shadow: inset 0 calc(-2 * var(--u)) 0 #8cf0a8; }
+.feed-row.ww-poison { box-shadow: inset 0 calc(-2 * var(--u)) 0 #d048a8; }
+.feed-row.ww-miss { box-shadow: inset 0 calc(-2 * var(--u)) 0 var(--amber, #e8a33d); }
+.feed-row .ww-note {
+  color: var(--paper-dim, rgba(242, 232, 216, 0.72));
+  font-style: italic;
+}
+
+/* --- scrubber beats: one rule per kind the sim emits -------------------- */
+.beat-marker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: calc(3 * var(--u));
+  margin-left: calc(-1.5 * var(--u));
+  padding: 0;
+  border: 0;
+  background: rgba(242, 232, 216, 0.5);
+  cursor: pointer;
+  z-index: 4;
+}
+.beat-marker:hover { filter: brightness(1.5); }
+.beat-marker:focus-visible { outline: 1px solid var(--amber, #e8a33d); }
+.beat-marker.capture { background: #8cf0a8; }
+.beat-marker.poison { background: #d048a8; }
+.beat-marker.target_met {
+  background: var(--amber, #e8a33d);
+  width: calc(5 * var(--u));
+  margin-left: calc(-2.5 * var(--u));
+}
+.beat-marker.gameover, .beat-marker.over {
+  background: var(--paper, #f2e8d8);
+  width: calc(5 * var(--u));
+  margin-left: calc(-2.5 * var(--u));
+}
+
+/* --- endcard ----------------------------------------------------------- */
+.ec-row .ww-alias { color: var(--paper-dim, rgba(242, 232, 216, 0.7)); }
+
+/* --- 360 px floor ------------------------------------------------------ */
+/* At the featured-match width the ray legend, the thrust counter and the
+   bubble caption go; the score, CAUGHT n / 20 and the clock stay. The four
+   policy names live in the endcard and in each roster row's title. */
+#stage.tiny #ww-legend,
+#stage.tiny .ww-thrust,
+#stage.tiny .plate .ww-sub .ww-nibbles { display: none; }
+#stage.tiny .ww-obj { min-width: calc(62 * var(--u)); }
+</style>
+<script>
+(function () {
+  'use strict';
+  // Every name here carries a ww- prefix ON PURPOSE. The page's chrome alias
+  // block declares the shared beat builder with a hoisted `var markBeat =
+  // C.markBeat`, so a game-block function of that same name is silently
+  // swallowed by it and the scrubber ends up with unlabelled div markers that
+  // never seek. tests/test_viewer.nim asserts the whole alias list is untouched
+  // below this banner.
+  var CTX = null;
+  var placed = {};            // "tick|kind" -> true (dedup)
+  var legendUntil = -1;
+  var lastTurn = -1;
+
+  function $(id) { return document.getElementById(id); }
+
+  function scrubGeometry(s) {
+    var st = Math.max(0, s.st || 0);
+    var mx = Math.max(st + 1, s.mx || 1);
+    return { st: st, span: mx - st };
+  }
+
+  function wwMarkBeat(s, tick, kind, team, label) {
+    var key = tick + '|' + kind;
+    if (placed[key]) return;
+    placed[key] = true;
+    var scrub = $('scrub');
+    if (!scrub) return;
+    var g = scrubGeometry(s);
+    var el = document.createElement('button');
+    el.type = 'button';
+    el.className = 'beat-marker ' + kind + (team ? ' ' + team : '');
+    el.style.left =
+      (Math.min(1, Math.max(0, (tick - g.st) / g.span)) * 100) + '%';
+    el.title = label;
+    el.setAttribute('aria-label', label);
+    el.__tick = tick;
+    el.addEventListener('click', function (ev) {
+      ev.stopPropagation();
+      CTX.send('s:' + tick);
+    });
+    scrub.appendChild(el);
+  }
+
+  function clock(tick) {
+    var sec = Math.max(0, Math.round(tick / (CTX.C.FPS || 24)));
+    return CTX.fmt(sec);
+  }
+
+  function feedRow(html, cls) {
+    var row = document.createElement('div');
+    row.className = 'feed-row' + (cls ? ' ' + cls : '');
+    row.innerHTML = html;
+    CTX.pushFeed(row);
+  }
+
+  function alias(s, skimmer) {
+    var roster = s.roster || [];
+    for (var i = 0; i < roster.length; i++) {
+      if (roster[i].skimmer === skimmer) return roster[i].alias;
+    }
+    return 'SKIM-' + (skimmer + 1);
+  }
+
+  // --- events -------------------------------------------------------------
+  // Every beat and feed row waterworld produces. Returns true when the event
+  // was handled here, so the inherited switch never doubles it.
+  function wwEvent(e, s, ctx) {
+    CTX = ctx;
+    switch (e.k) {
+      case 'capture': {
+        var who = (e.skimmers || []).map(function (i) { return alias(s, i); });
+        wwMarkBeat(s, e.t, 'capture', '',
+          'Catch — ' + clock(e.t - Math.max(0, s.st || 0)) + ' — ' +
+          who.join(' + ') + ' — click to jump here');
+        feedRow(
+          '<span class="who">' + CTX.esc(who.join(' + ')) + '</span>' +
+          '<span class="glyph">▸</span>' +
+          '<span class="who">take plankton</span>' +
+          '<span class="badge">+10</span>', 'ww-catch');
+        return true;
+      }
+      case 'nibble':
+        feedRow(
+          '<span class="who">' + CTX.esc(alias(s, e.skimmer)) + '</span>' +
+          '<span class="glyph">·</span>' +
+          '<span class="who">alone on plankton — waiting</span>' +
+          '<span class="badge">+0.05</span>');
+        return true;
+      case 'poison':
+        wwMarkBeat(s, e.t, 'poison', '',
+          'Poison — ' + clock(e.t - Math.max(0, s.st || 0)) + ' — ' +
+          alias(s, e.skimmer) + ' stunned — click to jump here');
+        feedRow(
+          '<span class="who">' + CTX.esc(alias(s, e.skimmer)) + '</span>' +
+          '<span class="glyph">✕</span>' +
+          '<span class="who">hits poison — stunned</span>' +
+          '<span class="badge tk">−2</span>', 'ww-poison');
+        return true;
+      case 'near_miss':
+        feedRow('<span class="who">SO CLOSE</span>' +
+          '<span class="glyph">·</span>' +
+          '<span class="who">plankton slipped between two skimmers</span>',
+          'ww-miss');
+        return true;
+      case 'target_met':
+        wwMarkBeat(s, e.t, 'target_met', '',
+          'Target met — ' + e.captures + ' caught — click to jump here');
+        CTX.banner('TARGET MET', 'wipe accent');
+        return true;
+      case 'gameover':
+        wwMarkBeat(s, e.t, 'gameover', '', 'Run over — click to jump here');
+        return true;
+      case 'turn_end':
+        if (e.turn !== lastTurn) {
+          lastTurn = e.turn;
+          feedRow('<span class="who">TURN ' + (e.turn + 1) + '</span>' +
+            '<span class="glyph">·</span>' +
+            '<span class="who">' + ((s.roster || []).length) +
+            ' new orders</span>');
+        }
+        return true;
+      case 'spawn':
+      case 'stun_end':
+      case 'phase':
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  var seenIntents = {};
+  function wwFrame(s, ctx, jumped) {
+    CTX = ctx;
+    ensureLegend(s);
+    if (jumped) seenIntents = {};
+    // The LLM's own voice: each seat's `note` and `say`, straight from the
+    // intent records the replay carries.
+    (s.intents || []).forEach(function (it) {
+      var key = it.turn + '|' + it.seat;
+      if (seenIntents[key]) return;
+      seenIntents[key] = true;
+      if (!it.note && !it.say) return;
+      var line = it.say ? it.say : it.note;
+      feedRow(
+        '<span class="who">' + CTX.esc(it.alias) + '</span>' +
+        '<span class="glyph">“</span>' +
+        '<span class="ww-note">' + CTX.esc(line) + '</span>' +
+        '<span class="badge">' + CTX.esc(it.mode) + '</span>');
+    });
+    // The full-episode beats ride the first chrome frame; place them up front so
+    // the scrubber tells the story before playback gets there.
+    if (s.beats && s.beats.length) {
+      for (var i = 0; i < s.beats.length; i++) {
+        var b = s.beats[i];
+        if (b.k === 'capture') {
+          var who = (b.skimmers || []).map(function (n) { return alias(s, n); });
+          wwMarkBeat(s, b.t, 'capture', '',
+            'Catch — ' + who.join(' + ') + ' — click to jump here');
+        } else if (b.k === 'poison') {
+          wwMarkBeat(s, b.t, 'poison', '',
+            'Poison — ' + alias(s, b.skimmer) + ' stunned — click to jump here');
+        } else if (b.k === 'target_met') {
+          wwMarkBeat(s, b.t, 'target_met', '',
+            'Target met — ' + b.captures + ' caught — click to jump here');
+        } else if (b.k === 'gameover') {
+          wwMarkBeat(s, b.t, 'gameover', '', 'Run over — click to jump here');
+        }
+      }
+    }
+  }
+
+  window.WaterworldChrome = {
+    install: function (ctx) { CTX = ctx; },
+    frame: wwFrame,
+    event: wwEvent
+  };
+})();
+</script>
+
+</body>
+</html>

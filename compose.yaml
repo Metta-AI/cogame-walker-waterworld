@@ -1,0 +1,10 @@
+# ONE service, named for the coworld, so the manifest's image placeholder is
+# {{WALKER_WATERWORLD_IMAGE}} — placeholders are derived from COMPOSE SERVICE
+# NAMES by uppercasing and replacing '-' with '_'. {{GAME_IMAGE}} is not a thing.
+services:
+  walker-waterworld:
+    image: coworld-walker-waterworld:latest
+    platform: linux/amd64
+    build:
+      context: .
+      network: host

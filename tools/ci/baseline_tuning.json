@@ -1,0 +1,14 @@
+{
+  "swept": "tools/tune_baselines.nim",
+  "note": "The grid harness's pick, not a guess. `tools/tune_baselines.nim` plays four shoals over a bounded matrix of these three numbers across a seed panel and prints the table; this file records the winning cell and tests/test_tuning.nim asserts the shipped DefaultBaselineParams still equal it. THE PHYSICS CONSTANTS IN sim_types.nim ARE NOT SWEPT: if four shoals cannot capture, these three numbers are wrong, not the tank.",
+  "grid": {
+    "pairJoinRadiusUm": [2400000, 2800000, 3200000, 3600000],
+    "standoffMilli": [900, 1200, 1500, 1800],
+    "leadTicks": [4, 6, 8, 12]
+  },
+  "pick": {
+    "pairJoinRadiusUm": 3200000,
+    "standoffMilli": 1200,
+    "leadTicks": 8
+  }
+}

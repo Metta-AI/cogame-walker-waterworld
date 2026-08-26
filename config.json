@@ -1,0 +1,28 @@
+{
+  "num_agents": 4,
+  "minPlayers": 4,
+  "maxTicks": 1728,
+  "maxGames": 1,
+  "turnTicks": 72,
+  "turnBudgetMs": 16000,
+  "attempt1Ms": 9000,
+  "retryMs": 5000,
+  "turnSpacingMs": 12000,
+  "wallClockBudgetSeconds": 660,
+  "lobbyJoinTimeoutTicks": 1728,
+  "captureTarget": 20,
+  "fastMode": true,
+  "tokens": ["0xSKIM_0", "0xSKIM_1", "0xSKIM_2", "0xSKIM_3"],
+  "players": [
+    {"name": "player1"},
+    {"name": "player2"},
+    {"name": "player3"},
+    {"name": "player4"}
+  ],
+  "slots": [
+    {"alias": "SKIM-1"},
+    {"alias": "SKIM-2"},
+    {"alias": "SKIM-3"},
+    {"alias": "SKIM-4"}
+  ]
+}

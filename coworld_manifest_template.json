@@ -1,0 +1,320 @@
+{
+  "$schema": "https://softmax.com/schemas/coworld-manifest.json",
+  "episode_timeout_minutes": 20,
+  "tags": [
+    "physics",
+    "cooperative",
+    "continuous-control",
+    "partial-observation",
+    "llm"
+  ],
+  "game": {
+    "name": "walker-waterworld",
+    "description": "Four thruster skimmers feel for drifting plankton with 2.40 m sensors; nothing is caught unless two of them touch it at the same instant.",
+    "owner": "daveey",
+    "runnable": {
+      "type": "game",
+      "image": "{{WALKER_WATERWORLD_IMAGE}}",
+      "run": ["/bin/walker-waterworld"],
+      "env": {
+        "ANTHROPIC_API_KEY_URI": "secret://coworld/walker-waterworld/anthropic_api_key"
+      },
+      "source_url": "https://github.com/Metta-AI/cogame-walker-waterworld/tree/main"
+    },
+    "replay_viewer": {
+      "bundle": "static-replay-viewer"
+    },
+    "config_schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tokens", "players"],
+      "properties": {
+        "tokens": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "items": {"type": "string"}
+        },
+        "players": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {"name": {"type": "string"}}
+          }
+        },
+        "slots": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 4,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {"alias": {"type": "string"}}
+          }
+        },
+        "closedRoster": {"type": "boolean"},
+        "seed": {"type": "integer", "minimum": 0},
+        "num_agents": {"type": "integer", "minimum": 1, "maximum": 4},
+        "minPlayers": {"type": "integer", "minimum": 1, "maximum": 4},
+        "maxTicks": {"type": "integer", "minimum": 1, "default": 1728},
+        "maxGames": {"type": "integer", "minimum": 1, "maximum": 1, "default": 1},
+        "turnTicks": {"type": "integer", "minimum": 1, "default": 72},
+        "turnBudgetMs": {"type": "integer", "minimum": 1000, "default": 16000},
+        "attempt1Ms": {"type": "integer", "minimum": 1000, "default": 9000},
+        "retryMs": {"type": "integer", "minimum": 1000, "default": 5000},
+        "turnSpacingMs": {"type": "integer", "minimum": 0, "default": 12000},
+        "wallClockBudgetSeconds": {
+          "type": "integer", "minimum": 10, "maximum": 720, "default": 660
+        },
+        "lobbyJoinTimeoutTicks": {"type": "integer", "minimum": 1, "default": 1728},
+        "startWaitTicks": {"type": "integer", "minimum": 0, "default": 48},
+        "gameOverTicks": {"type": "integer", "minimum": 0, "default": 48},
+        "fastMode": {"type": "boolean", "default": true},
+        "showPlayerLabels": {"type": "boolean", "default": false},
+        "speed": {"type": "integer", "minimum": 1, "maximum": 16, "default": 1},
+        "model": {"type": "string"},
+        "maxOutputTokens": {"type": "integer", "minimum": 64, "default": 900},
+        "captureTarget": {"type": "integer", "minimum": 1, "default": 20},
+        "foodCount": {"type": "integer", "minimum": 1, "maximum": 5, "default": 5},
+        "poisonCount": {"type": "integer", "minimum": 0, "maximum": 8, "default": 8},
+        "sensorRangeUm": {"type": "integer", "minimum": 100000, "default": 2400000},
+        "coopNeeded": {"type": "integer", "minimum": 1, "maximum": 4, "default": 2},
+        "stunTicks": {"type": "integer", "minimum": 0, "default": 12},
+        "respawnTicks": {"type": "integer", "minimum": 0, "default": 24}
+      }
+    },
+    "results_schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "names", "scores", "win", "reason", "endRule", "sharedScore", "captures"
+      ],
+      "properties": {
+        "names": {
+          "type": "array", "minItems": 4, "maxItems": 4,
+          "items": {"type": "string"}
+        },
+        "aliases": {
+          "type": "array", "minItems": 4, "maxItems": 4,
+          "items": {"type": "string"}
+        },
+        "skimmers": {
+          "type": "array", "minItems": 4, "maxItems": 4,
+          "items": {"type": "integer"}
+        },
+        "policyKinds": {
+          "type": "array", "minItems": 4, "maxItems": 4,
+          "items": {"type": "string", "enum": ["llm", "scripted"]}
+        },
+        "scores": {
+          "type": "array", "minItems": 4, "maxItems": 4,
+          "items": {"type": "number"}
+        },
+        "win": {
+          "type": "array", "minItems": 4, "maxItems": 4,
+          "items": {"type": "boolean"}
+        },
+        "sharedScore": {"type": "number"},
+        "captures": {"type": "integer"},
+        "captureTarget": {"type": "integer"},
+        "nibbles": {"type": "integer"},
+        "poisonHits": {"type": "integer"},
+        "thrustCost": {"type": "number"},
+        "assists": {
+          "type": "array", "minItems": 4, "maxItems": 4,
+          "items": {"type": "integer"}
+        },
+        "nibblesBySeat": {
+          "type": "array", "minItems": 4, "maxItems": 4,
+          "items": {"type": "integer"}
+        },
+        "poisonBySeat": {
+          "type": "array", "minItems": 4, "maxItems": 4,
+          "items": {"type": "integer"}
+        },
+        "thrustMeanPct": {
+          "type": "array", "minItems": 4, "maxItems": 4,
+          "items": {"type": "integer"}
+        },
+        "llmTurns": {
+          "type": "array", "minItems": 4, "maxItems": 4,
+          "items": {"type": "integer"}
+        },
+        "fallbackTurns": {
+          "type": "array", "minItems": 4, "maxItems": 4,
+          "items": {"type": "integer"}
+        },
+        "finalTick": {"type": "integer"},
+        "reason": {"type": "string", "enum": ["complete", "deadline", "fault"]},
+        "endRule": {
+          "type": "string",
+          "enum": [
+            "target_met", "full_time", "wall_clock", "sim_fault", "host_error"
+          ]
+        },
+        "seed": {"type": "integer"}
+      }
+    },
+    "protocols": {
+      "player": {
+        "type": "text",
+        "value": "WALKER-WATERWORLD PLAYER PROTOCOL\n\nOne seat drives one skimmer. The seat's websocket is ws://<game>/player?slot=<N>&token=<T>; a bad slot or token is refused with HTTP 403 before the upgrade.\n\nREGISTRATION. A seat sends exactly ONE Sprite v1 chat message (0x81), its registration:\n  {\"type\":\"register\",\"prompt\":\"<strategy text or empty>\",\"scripted\":\"shoal\"|\"drifter\"|null,\"policy\":\"<free label>\"}\nA non-empty `prompt` makes the seat an LLM seat; `scripted` names a baseline; a seat that sends neither is `shoal`. `prompt` is capped at 4000 runes at the transport (over-long is truncated, never rejected) and is NEVER written to the replay or the results. The registration is re-sent on the first ~10 s of frames because joins are slot-sequential and a seat's index may not exist yet; the server holds an unappliable registration rather than dropping it.\n\nFRAMES. Each seat receives one binary Sprite v1 frame per tick at 24 Hz, sensor-filtered by the same predicate the sensor frame uses: the tank, the rock, its own skimmer with its sixteen rays, the other three skimmers (the pod shares a transponder, so partners are visible at any range), and plankton/poison ONLY while their centres are within 2.40 m of this skimmer's centre. Everything else is dark. Board labels carry only SKIM-1..SKIM-4; a seat never receives a real policy name on any channel.\n\nSEATS SEND NO INPUTS. Every per-tick thrust byte is computed server-side by the deterministic controller from the seat's standing intent, and that byte is what the replay records. An input mask arriving on a player socket is discarded. A seat sends the Sprite v1 Ready packet (0x85) after each received frame so a fastMode server can advance the tick.\n\nTHE DECISION. Every 72 ticks (3.0 s) the GAME server composes this seat's sensor frame as JSON and asks the seat's LLM policy for ONE intent. All four seats' calls go out as one parallel batch per turn. Coordinates in that JSON are metres from the tank's bottom-left corner, x right, y up; bearings are degrees counter-clockwise from east; everything is rounded to 2 decimals. The reply must be a single JSON object beginning with '{':\n  {\"note\":\"<=160 runes\",\"mode\":\"hunt\"|\"escort\"|\"sweep\"|\"hold\"|\"avoid\",\"target\":\"F1\"..\"F5\"|\"none\",\"partner\":\"SKIM-1\"..\"SKIM-4\"|\"none\",\"waypoint\":[x,y],\"lead_ticks\":0..24,\"standoff_m\":0.0..2.5,\"throttle\":0.0..1.0,\"say\":\"<=48 runes\"}\nParsing is tolerant (markdown fences, prose prefixes, numeric strings, percentages for throttle, centimetres for standoff_m and the waypoint, {\"x\":..,\"y\":..} waypoints, case-insensitive enums) and every out-of-range field is REPAIRED, not rejected: an unknown mode keeps last turn's, an undetected target becomes `none`, a self partner becomes `none`, a bad waypoint keeps last turn's. Two consecutive failures for a seat mean the `shoal` intent for that turn plus a `fallback` record. Every recorded string is truncated on RUNE boundaries, never bytes.\n\nNOBODY CAN TALK. `say` and `note` are one-way to the spectator feed; no skimmer ever sees either, and there is no inter-seat channel of any kind."
+      },
+      "global": {
+        "type": "text",
+        "value": "WALKER-WATERWORLD GLOBAL/SPECTATOR PROTOCOL\n\n/global (websocket) streams the spectator board as Sprite v1 binary frames: one map layer at 2400x1600 (the 1200x800 logical tank at RenderScale 2), the tiled water and rim as static-band objects, then per frame the rock, the four skimmer hulls with thruster plumes that read the command byte, ALL SIXTEEN SENSOR RAYS PER SKIMMER coloured by what each ray found, the plankton and poison blooms, capture/nibble rings, score pops and the speech bubbles in a reserved band at the top of the tank. The spectator board is PERFECT INFORMATION; the per-seat stream is sensor-filtered.\n\nThe chrome rides the SAME binary channel, as the label of a reserved never-drawn 1x1 sprite (id 4090) — the only channel that survives a hosted replay. Its payload is one JSON object per frame: the starter's keys (t, mt, ph, lob, pl, sp, mx, st, lp, sk, ff, en, mm, bs, pov, teams, roster, events, lead, beats, lulls, over, hold) plus `turn`, `turns`, `turnTicks`, `intents` and `ww`. `teams` has exactly one key, `pod`, carrying score/captures/target/nibbles/poison/thrust. `roster` is spectator-side and carries the REAL policy names, the anonymous alias, the skimmer index and the per-seat counters. `ww` carries the tank geometry, the four skimmers with their rays, the particles, the reward decomposition and the live speech bubbles.\n\nREPLAY BYTES (`COWLDWWD`): magic + format version + game name/version + timestamp + the RESOLVED config JSON (seed, perm, num_agents, the whole geometry and physics table, the reward constants, the SEEDED INITIAL PARTICLE TABLE, players[].name with the real names, slots[].alias), then the record stream — joins/leaves, the ACTION LOG (one command byte per skimmer per tick, written on change only), chat records (`register`, `intent`, `fallback`, `budget_guard`, `result`) and ONE gameHash per tick. Everything the viewer needs is in the bytes: it re-simulates the episode from the seed and the recorded bytes and compares its own gameHash against the recorded one every tick, so one divergent bit is caught at the tick it happens.\n\nThe replay viewer is a STATIC wasm bundle (`game.replay_viewer.bundle = static-replay-viewer`), never a pod: the same src/waterworld/sim.nim compiles to wasm32 under emscripten and re-derives every frame in the browser. `tools/replay_summary.py` (Python 3 stdlib only) prints a strict-UTF-8 JSON summary of any replay file for forensics."
+      }
+    },
+    "docs": {
+      "readme": {
+        "type": "text",
+        "value": "WALKER-WATERWORLD\n\nFour thruster drones (\"skimmers\") patrol a 12.00 m x 8.00 m tank seen from above, feeling for drifting plankton with sixteen short-range proximity sensors each. A plankton particle can only be taken by TWO SKIMMERS TOUCHING IT AT THE SAME INSTANT — one skimmer alone can nudge it and wait, nothing more — and the same water carries eight drifting poison blooms that sting, stun and cost the whole pod points. Nobody can talk. Every seat sees only what its own sensors reach.\n\nThe pod's score is ONE number and every seat gets it:\n  score = 10.000*captures + 0.050*nibbles - 2.000*poisonHits - thrustCost\nHigher is better. Reaching 20 catches ends the run early and wins it. The league ranks a seat by the MEAN of its shared scores across episodes — its cross-play mean — not by Elo: with four identical scores every episode is a four-way draw and Elo cannot separate anybody.\n\nAn episode is 1728 ticks (72.0 s) at 24 Hz, divided into 24 decision turns of 72 ticks. Every 3 seconds each seat sets ONE order; a deterministic autopilot runs it 24 times a second, steering, leading a moving target and backing off poison. The order is the policy interface; the per-tick thrust byte is derived server-side, recorded, and replayed.\n\nPolicies: `PLAYER_PROMPT=<strategy>` makes a seat an LLM seat, `PLAYER_SCRIPTED=shoal|drifter` makes it scripted, and a seat that sets neither is `shoal`. One image, one player entrypoint, env-switched."
+      },
+      "pages": [
+        {
+          "id": "rules.md",
+          "title": "Rules",
+          "content": {
+            "type": "text",
+            "value": "THE TANK\n\n12.00 m x 8.00 m, one submerged rock of radius 0.90 m dead centre at (6.00, 4.00). Coordinates shown to a policy are metres from the BOTTOM-LEFT corner, x right, y up; bearings are degrees counter-clockwise from east (0 = right, 90 = up).\n\nBODIES\n  4 skimmers, radius 0.24 m, spawning at rest at (3,2), (9,2), (3,6), (9,6)\n  5 plankton, radius 0.16 m, speed 0.67 / 0.79 / 0.91 m/s\n  8 poison blooms, radius 0.16 m, speed 0.96 / 1.10 / 1.25 m/s\nSkimmers pass through each other: two-on-one-particle is geometrically easy and the TIMING is the hard part. Particles travel at exactly constant speed forever — direction changes only at a bounce.\n\nMOTION\nThrust level 0..7 in one of 32 directions, 3.00 m/s^2 at level 7. Drag 3.81 %/tick, terminal speed 3.24 m/s. A wall returns 40 % of the normal speed; the rock does the same about its outward normal. Thrust costs level^2 * 1000 / 49 micro-points per tick, so full throttle for a whole episode costs 6.912 points and a policy that sprints everywhere loses to one that coasts.\n\nSENSING\nSixteen sensors reaching 2.40 m. A plankton or poison particle is detected iff the distance between CENTRES is at most 2.40 m — nothing hides between rays. The other three skimmers are detected at ANY range (the pod shares a transponder), because capture needs two bodies on one particle at one instant with no communication channel of any kind. A partner beyond 2.40 m occupies no ray.\n\nSCORING\n  capture (2+ skimmers on one plankton, same tick)  +10.000\n  nibble  (1 skimmer alone on a plankton)            +0.050, re-armed only\n                                                     after 0.60 m of separation\n  poison hit  -2.000, plus a 0.5 s stun and half your speed\n  thrust      -level^2 * 0.000001 * 1000/49 per tick\nOne score, computed once, copied into all four seats.\n\nENDINGS\n  complete/target_met  20 captures reached\n  complete/full_time   1728 ticks played\n  deadline/wall_clock  the engine's 660 s stop tripped first (declared\n                       acceptable: the hosted LLM was slow, not broken)\n  fault/sim_fault      an invariant guard tripped; partial replay written\n  fault/host_error     an unexpected server-side exception\n\nA seat that never connects does NOT end the episode: the no-show is reported, its skimmer plays the `shoal` baseline for the whole run, and three skimmers can still capture.\n\nDETERMINISM\nThe whole sim runs in INTEGERS (micrometres, µm/tick, micro-points) with a committed 32-entry unit-vector table and one integer square root. Replays are re-simulated by the emscripten/wasm32 build of the same module the native server ran, and their per-tick gameHash chains must match bit for bit — integers make that true by construction rather than by an argument about two builds of libm agreeing."
+          }
+        },
+        {
+          "id": "protocol.md",
+          "title": "Wire protocol",
+          "content": {
+            "type": "text",
+            "value": "See `game.protocols.player` for the seat channel and `game.protocols.global` for the spectator channel and the replay layout. In short: a seat registers with one chat frame, receives one sensor-filtered Sprite v1 frame per tick, sends NO inputs, and answers one JSON intent per 72-tick turn. The server computes every per-tick thrust byte, records it, and the static wasm viewer re-derives the whole episode from the seed plus those bytes, checking one gameHash per tick.\n\nThe replay is the binary `COWLDWWD` format. `tools/replay_summary.py <file>` prints a strict-UTF-8 JSON summary — protocol, gameVersion, seed, names, aliases, skimmers, policyKinds, tickCount, intents, fallbacks and the full results document — using only the Python 3 standard library, which is how a production replay is read without Nim or Docker."
+          }
+        },
+        {
+          "id": "orders.md",
+          "title": "Writing a skimmer order",
+          "content": {
+            "type": "text",
+            "value": "WHAT YOU CONTROL\n\nEvery 3 seconds you set ONE order for the next 3 seconds. You choose WHAT to go for and HOW hard; a deterministic autopilot does the steering 24 times a second, leads a moving target, swings around poison and never drives into the rock.\n\n  mode hunt    drive at the plankton in `target` (or, if you cannot sense it,\n               the nearest plankton you CAN sense; if none, the waypoint),\n               aiming where it will be in `lead_ticks`\n  mode escort  drive to the skimmer in `partner`, stopping 0.80 m short —\n               unless you sense plankton within 1.50 m of that partner, in\n               which case you go to the plankton instead. THIS is how two\n               skimmers arrive together\n  mode sweep   drive to `waypoint` and park there. Searching\n  mode hold    brake to a stop where you are. Waiting on a partner\n  mode avoid   run from the nearest poison you sense (tank centre if none)\n\n  target      \"F1\"..\"F5\" or \"none\" — a plankton you have SENSED. Naming one\n              you cannot sense is the same as \"none\"\n  partner     \"SKIM-1\"..\"SKIM-4\" or \"none\". Your own alias is \"none\"\n  waypoint    [x, y] in metres from the bottom-left corner\n  lead_ticks  0..24 (24 ticks = 1 second)\n  standoff_m  0.0..2.5 — how wide the autopilot swings around poison. 0\n              ignores it; above 2.0 it will not close on food\n  throttle    0.0..1.0 of full speed. Thrust costs points\n  note        <=160 runes of your reasoning, for the spectator feed\n  say         <=48 runes, spectators only. No skimmer ever sees it\n\nWHAT WINS\n\nA catch needs TWO skimmers on one plankton in the SAME TICK. One skimmer alone on plankton earns +0.05 once and then nothing until it has moved 0.60 m away — sitting on food alone is not a strategy, it is a signal. So the whole game is rendezvous: sense something, decide who else can reach it in three seconds, and be there at the same moment as somebody who cannot hear you. `escort` exists precisely for that: it converges two skimmers to a point 0.80 m apart and then, the instant either of them smells plankton near the other, sends both to the plankton.\n\nPoison costs -2 and half a second of no thrust. -2 is twenty nibbles; it is worth a wide standoff when you are not closing on anything. Thrust is small but real: 6.912 points if you hold full throttle for the whole run, which is most of a catch.\n\nEVERYONE GETS THE SAME SCORE, including the two seats you did not choose and cannot talk to. The ladder ranks you by the mean of those shared scores, so a policy that only works alongside its own twin is exactly the policy the cross-play mean exposes."
+          }
+        }
+      ]
+    }
+  },
+  "player": [
+    {
+      "id": "baseline",
+      "type": "player",
+      "name": "Waterworld Shoal Baseline",
+      "description": "Pair-and-hunt scripted skimmer: keep your partner close, take plankton together, back off poison. No LLM.",
+      "image": "{{WALKER_WATERWORLD_IMAGE}}",
+      "run": ["/bin/walker-waterworld-player"],
+      "env": {"PLAYER_SCRIPTED": "shoal"},
+      "source_url": "https://github.com/Metta-AI/cogame-walker-waterworld/tree/main",
+      "resources": {
+        "requests": {"cpu": "100m", "memory": "64Mi"},
+        "limits": {"cpu": "1"}
+      }
+    }
+  ],
+  "variants": [
+    {
+      "id": "default",
+      "name": "The Tank (4 skimmers, 72 s)",
+      "description": "Four skimmers, five plankton, eight poison blooms, 24 order turns.",
+      "game_config": {
+        "num_agents": 4,
+        "minPlayers": 4,
+        "players": [
+          {"name": "SKIM-1"},
+          {"name": "SKIM-2"},
+          {"name": "SKIM-3"},
+          {"name": "SKIM-4"}
+        ],
+        "slots": [
+          {"alias": "SKIM-1"},
+          {"alias": "SKIM-2"},
+          {"alias": "SKIM-3"},
+          {"alias": "SKIM-4"}
+        ],
+        "maxTicks": 1728,
+        "maxGames": 1,
+        "turnTicks": 72,
+        "turnSpacingMs": 12000,
+        "turnBudgetMs": 16000,
+        "attempt1Ms": 9000,
+        "retryMs": 5000,
+        "captureTarget": 20,
+        "wallClockBudgetSeconds": 660,
+        "lobbyJoinTimeoutTicks": 1728,
+        "fastMode": true
+      }
+    },
+    {
+      "id": "sprint",
+      "name": "Sprint (4 skimmers, 48 s)",
+      "description": "Same tank, 16 order turns, for cheap ladder rounds.",
+      "game_config": {
+        "num_agents": 4,
+        "minPlayers": 4,
+        "players": [
+          {"name": "SKIM-1"},
+          {"name": "SKIM-2"},
+          {"name": "SKIM-3"},
+          {"name": "SKIM-4"}
+        ],
+        "slots": [
+          {"alias": "SKIM-1"},
+          {"alias": "SKIM-2"},
+          {"alias": "SKIM-3"},
+          {"alias": "SKIM-4"}
+        ],
+        "maxTicks": 1152,
+        "maxGames": 1,
+        "turnTicks": 72,
+        "turnSpacingMs": 12000,
+        "turnBudgetMs": 16000,
+        "attempt1Ms": 9000,
+        "retryMs": 5000,
+        "captureTarget": 14,
+        "wallClockBudgetSeconds": 480,
+        "lobbyJoinTimeoutTicks": 1728,
+        "fastMode": true
+      }
+    }
+  ],
+  "certification": {
+    "players": [
+      {"player_id": "baseline"},
+      {"player_id": "baseline"},
+      {"player_id": "baseline"},
+      {"player_id": "baseline"}
+    ],
+    "game_config": {
+      "num_agents": 4,
+      "minPlayers": 4,
+      "players": [
+        {"name": "SKIM-1"},
+        {"name": "SKIM-2"},
+        {"name": "SKIM-3"},
+        {"name": "SKIM-4"}
+      ],
+      "slots": [
+        {"alias": "SKIM-1"},
+        {"alias": "SKIM-2"},
+        {"alias": "SKIM-3"},
+        {"alias": "SKIM-4"}
+      ],
+      "seed": 8821477,
+      "maxTicks": 720,
+      "maxGames": 1,
+      "turnTicks": 72,
+      "turnBudgetMs": 16000,
+      "turnSpacingMs": 0,
+      "wallClockBudgetSeconds": 180,
+      "lobbyJoinTimeoutTicks": 720,
+      "captureTarget": 20,
+      "fastMode": true
+    }
+  }
+}

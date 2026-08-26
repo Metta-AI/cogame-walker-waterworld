@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>walker-waterworld — worst-case text render fixture</title>
+<!--
+  WHY THIS FILE EXISTS
+  ====================
+  tools/ci/docker_smoke.sh runs with NO ANTHROPIC_API_KEY, so every seat in the
+  only replay CI ever produces plays a scripted baseline — and a scripted
+  baseline emits short fixed `say` strings and no LLM `note` at all. So NOTHING
+  that plays that replay can exercise the chrome that shows LLM text: the
+  speech-bubble band on the board, the match feed at full cap, or the endcard's
+  per-seat rows with real policy names (cogchemists, 2026-08-24).
+
+  This fixture loads the real chrome (chrome_common.js + the engine's wire
+  constants) with a FULL-CAP 48-rune `say` and 160-rune `note` on ALL FOUR
+  SEATS AT ONCE, at 360, 620 and 1280 px, and draws the bubble band onto a
+  canvas exactly where src/waterworld/global.nim reserves it (view Y 7.10 ..
+  7.85 m of a 1200x800 board) so viewer_smoke.mjs --strict-text-bounds has real
+  fillText draws to measure. It self-checks its own string lengths, so a fixture
+  that stopped testing the cap fails instead of passing vacuously.
+
+  It sets data-replay-loaded="true" on its first drawn frame and keeps a ticking
+  clock so the harness's soak sees the page advancing.
+-->
+<style>
+  :root { --hudscale: 1; --u: calc(1px * var(--hudscale)); --band: 0px; --topband: 0px;
+    --paper: #f2e8d8; --paper-dim: rgba(242,232,216,0.66); --amber: #e8a33d;
+    --red: #e0523a; --green: #45a85e; }
+  body { margin: 0; background: #0b0704; color: var(--paper);
+    font-family: system-ui, sans-serif; }
+  .case { border-bottom: 1px solid rgba(242,232,216,0.14); padding: 8px 0 14px; }
+  .case h2 { font: 600 11px/1.4 system-ui; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--paper-dim); margin: 0 8px 6px; }
+  .frame { position: relative; overflow: hidden; margin: 0 8px;
+    background: #11212b; }
+  canvas { display: block; width: 100%; height: auto; }
+  #scorebug { display: flex; gap: calc(8 * var(--u)); align-items: center;
+    padding: calc(4 * var(--u)) calc(8 * var(--u)); }
+  .plates { display: flex; gap: calc(6 * var(--u)); flex: 1 1 0; min-width: 0; }
+  .plate { display: flex; gap: calc(6 * var(--u)); align-items: center;
+    background: rgba(11,7,4,0.62); padding: calc(3 * var(--u)) calc(6 * var(--u));
+    min-width: 0; flex: 1 1 auto; }
+  .lives-line { display: flex; gap: calc(6 * var(--u)); align-items: baseline;
+    min-width: 0; }
+  .plate-name { flex: 1 1 auto; min-width: 3.2em; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; }
+  .ww-score { font-variant-numeric: tabular-nums; font-weight: 700; }
+  #killfeed { padding: calc(4 * var(--u)) calc(8 * var(--u)); }
+  .feed-row { font: 12px/1.5 system-ui; padding: 2px 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ww-note { color: var(--paper-dim); font-style: italic; }
+  #speedchips, #scrub { display: none; }
+  #status { position: fixed; bottom: 4px; right: 6px; font: 11px/1 monospace;
+    color: var(--paper-dim); }
+</style>
+<script src="./wire_constants.js"></script>
+<script src="./chrome_common.js"></script>
+</head>
+<body>
+<div id="cases"></div>
+<div id="clock"><span id="clock-time">0:00</span><span id="clock-caption">fixture</span></div>
+<div id="tick-clock">0 / 0</div>
+<div id="status">fixture</div>
+<script>
+(function () {
+  'use strict';
+
+  // Full-cap strings, exactly at the server's own rune caps (MaxSayRunes 48,
+  // MaxNoteRunes 160 in src/waterworld/sim_types.nim). The 4-byte emoji is
+  // deliberate: the caps are measured in RUNES, so a byte-truncating renderer
+  // shows up here rather than in a production replay.
+  var SAY = 'on F2 with two, breaking off the rock now \uD83D\uDC1F';
+  var NOTE = 'F2 is drifting into SKIM-2 lane and my mate is 2.9 m out, so I ' +
+    'hold the plankton and take the nibble while it closes; poison P5 sits ' +
+    '1.9 m south so standoff stays 1.4';
+
+  function runeLen(s) { return Array.from(s).length; }
+
+  var checks = [];
+  function check(name, ok, detail) {
+    checks.push({ name: name, ok: !!ok, detail: detail || '' });
+    if (!ok) {
+      document.documentElement.setAttribute(
+        'data-replay-error', 'fixture check failed: ' + name + ' ' + (detail || ''));
+    }
+  }
+  check('say is exactly the 48-rune cap', runeLen(SAY) === 48, runeLen(SAY));
+  check('note is exactly the 160-rune cap', runeLen(NOTE) === 160, runeLen(NOTE));
+  check('wire constants spliced', !!(window.WATERWORLD_WIRE &&
+    window.WATERWORLD_WIRE.speeds && window.WATERWORLD_WIRE.speeds.length === 6),
+    JSON.stringify(window.WATERWORLD_WIRE || null));
+  check('chrome_common present', typeof window.ChromeCommon === 'function');
+
+  var SEATS = [
+    { alias: 'SKIM-1', name: 'walker-waterworld-tandemhunt', tint: '#ff7a2f' },
+    { alias: 'SKIM-2', name: 'walker-waterworld-relay', tint: '#39d7e8' },
+    { alias: 'SKIM-3', name: 'Baseline (3)', tint: '#b072f0' },
+    { alias: 'SKIM-4', name: 'Baseline (4)', tint: '#d9e24a' }
+  ];
+
+  // The bubble band the board reserves: view Y 7.10 .. 7.85 m on a 1200x800
+  // logical board, emitted at RenderScale 2 -> board pixels 30 .. 180 of 1600.
+  var BOARD_W = 2400, BOARD_H = 1600;
+  var BAND_TOP = Math.round((8.0 - 7.85) * 100 * 2);
+  var BAND_BOTTOM = Math.round((8.0 - 7.10) * 100 * 2);
+
+  function drawBoard(canvas) {
+    var ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, BOARD_W, BOARD_H);
+    ctx.fillStyle = '#11212b';
+    ctx.fillRect(0, 0, BOARD_W, BOARD_H);
+    ctx.fillStyle = 'rgba(242,232,216,0.06)';
+    ctx.fillRect(0, BAND_TOP, BOARD_W, BAND_BOTTOM - BAND_TOP);
+    // At most THREE bubbles at a time, evenly spaced in the band, never
+    // positioned relative to a skimmer. Same rule the board renderer applies.
+    var slots = 3;
+    ctx.font = '600 30px system-ui, sans-serif';
+    ctx.textBaseline = 'middle';
+    for (var i = 0; i < slots; i++) {
+      var seat = SEATS[i];
+      var text = seat.alias + ': ' + SAY;
+      var w = ctx.measureText(text).width;
+      var cx = BOARD_W * (i * 2 + 1) / (slots * 2);
+      var x = Math.max(8, Math.min(BOARD_W - w - 8, cx - w / 2));
+      var y = (BAND_TOP + BAND_BOTTOM) / 2;
+      ctx.fillStyle = 'rgba(246,241,234,0.94)';
+      ctx.fillRect(x - 10, y - 24, w + 20, 48);
+      ctx.strokeStyle = seat.tint;
+      ctx.lineWidth = 3;
+      ctx.strokeRect(x - 10, y - 24, w + 20, 48);
+      ctx.fillStyle = '#1e1814';
+      ctx.fillText(text, x, y);
+    }
+    // The score pops, drawn where a capture happens rather than in the band.
+    ctx.font = '700 34px system-ui, sans-serif';
+    ctx.fillStyle = '#8cf0a8';
+    ctx.fillText('+10', BOARD_W / 2, BOARD_H / 2);
+    ctx.fillStyle = '#d048a8';
+    ctx.fillText('-2', BOARD_W / 3, BOARD_H * 0.7);
+  }
+
+  function buildCase(width) {
+    var wrap = document.createElement('div');
+    wrap.className = 'case';
+    var head = document.createElement('h2');
+    head.textContent = width + ' px — full-cap say on every seat';
+    wrap.appendChild(head);
+
+    var frame = document.createElement('div');
+    frame.className = 'frame';
+    frame.style.width = width + 'px';
+    frame.style.setProperty('--hudscale',
+      Math.max(0.5, Math.min(1.6, width / 760)).toFixed(3));
+
+    var canvas = document.createElement('canvas');
+    canvas.width = BOARD_W;
+    canvas.height = BOARD_H;
+    frame.appendChild(canvas);
+
+    var bug = document.createElement('div');
+    bug.id = 'scorebug';
+    bug.innerHTML =
+      '<div class="plates"><div class="plate">' +
+      '<div class="lives-line">' +
+      '<span class="team-name plate-name">THE POD</span>' +
+      '<span class="ww-score">119.150</span></div></div></div>' +
+      '<div class="plates"><div class="plate">' +
+      '<span class="ww-caught">CAUGHT 13 / 20</span></div></div>';
+    frame.appendChild(bug);
+
+    var feed = document.createElement('div');
+    feed.id = 'killfeed';
+    SEATS.forEach(function (seat) {
+      var row = document.createElement('div');
+      row.className = 'feed-row';
+      row.innerHTML = '<span class="who" style="color:' + seat.tint + '">' +
+        seat.alias + '</span> <span class="ww-note">' + NOTE + '</span>';
+      feed.appendChild(row);
+      var said = document.createElement('div');
+      said.className = 'feed-row';
+      said.innerHTML = '<span class="who">' + seat.name + '</span> ' +
+        '<span class="ww-note">' + SAY + '</span>';
+      feed.appendChild(said);
+    });
+    frame.appendChild(feed);
+
+    wrap.appendChild(frame);
+    document.getElementById('cases').appendChild(wrap);
+    drawBoard(canvas);
+    return canvas;
+  }
+
+  var canvases = [360, 620, 1280].map(buildCase);
+
+  // No plate caption may collapse to a bare ellipsis at 360 px: .plate-name has
+  // flex: 1 1 auto and min-width: 3.2em precisely so it cannot.
+  var narrow = document.querySelector('.frame .plate-name');
+  check('plate name is not collapsed at 360 px',
+    narrow && narrow.getBoundingClientRect().width >= 30,
+    narrow ? narrow.getBoundingClientRect().width : 'missing');
+
+  var tick = 0;
+  function frame() {
+    tick += 1;
+    document.getElementById('tick-clock').textContent = tick + ' / 1728';
+    document.getElementById('clock-time').textContent =
+      '0:' + String(Math.min(59, Math.floor(tick / 24))).padStart(2, '0');
+    canvases.forEach(drawBoard);
+    if (tick === 1) {
+      document.documentElement.setAttribute('data-replay-loaded', 'true');
+      var failed = checks.filter(function (c) { return !c.ok; });
+      document.getElementById('status').textContent = failed.length
+        ? 'FIXTURE FAILED: ' + failed.map(function (c) { return c.name; }).join(', ')
+        : 'fixture ok — ' + checks.length + ' checks';
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,35 @@
+[
+  {
+    "name": "walker-waterworld-tandemhunt",
+    "run": "/bin/walker-waterworld-player",
+    "env": {
+      "PLAYER_POLICY_LABEL": "tandemhunt",
+      "PLAYER_PROMPT": "Hunt in a fixed pair and never break it. Your partner is the skimmer whose number differs from yours only in the last bit: SKIM-1 pairs with SKIM-2, and SKIM-3 pairs with SKIM-4. Read your own alias first, then work out your partner's, then keep that partner within about 3 m for the whole episode - two skimmers 6 m apart cannot catch anything, no matter how much plankton either of them can smell. Rules, in order. If you sense poison closer than 0.80 m, mode \"avoid\", throttle 1.0, for one turn only. Otherwise, if you sense a plankton AND your partner is within 3.20 m of it, mode \"hunt\" that plankton, lead_ticks 8, throttle 1.0, standoff_m 1.2 - you are both going to arrive and that is the +10. Otherwise, if you sense a plankton but your partner is far from it, still \"hunt\" it with throttle 0.6 and lead_ticks 4 if you are already inside 1.20 m of it (sit on it, take the +0.05, and wait - your partner is coming), but \"escort\" your partner with throttle 1.0 if you are further away than that: fetching your partner is worth more than being alone on food. Otherwise \"escort\" your partner if you are more than 2.40 m apart. If you are together and nobody smells anything, \"sweep\": pick the waypoint of the four corners of the search box - [3,2], [9,2], [9,6], [3,6] - that is FURTHEST from where you are now, so the pair sweeps the tank instead of orbiting one corner, and set throttle 0.7 to keep the thrust bill down. Keep standoff_m at 1.2 unless you have been stunned this episode, then 1.8. Never set standoff_m above 2.0: a paranoid autopilot will not close on food."
+    }
+  },
+  {
+    "name": "walker-waterworld-relay",
+    "run": "/bin/walker-waterworld-player",
+    "env": {
+      "PLAYER_POLICY_LABEL": "relay",
+      "PLAYER_PROMPT": "Play zones and relay, not fixed pairs. Split the tank at x = 6.00. SKIM-1 and SKIM-3 own the LEFT half, SKIM-2 and SKIM-4 own the RIGHT half. Read your alias and know which half is yours. Inside your own half you are the finder: \"sweep\" between [2.0,2.0], [2.0,6.0], [4.5,4.0] (left) or [10.0,2.0], [10.0,6.0], [7.5,4.0] (right), throttle 0.65, picking whichever of your three points is furthest from you, standoff_m 1.4. The moment you sense a plankton in your half, stop sweeping: \"hunt\" it with lead_ticks 10 and throttle 1.0 if the nearest OTHER skimmer is within 3.50 m of you, because that skimmer will follow you in; otherwise \"hunt\" it with throttle 0.5 and lead_ticks 2, which parks you on it and keeps it in your sensors while somebody arrives. You are the relay for your zone partner - the other skimmer whose home half is yours. If your zone partner is inside 1.00 m of a plankton you can also sense, \"hunt\" that plankton at throttle 1.0, lead_ticks 6. If your zone partner is holding still in your half and you sense nothing yourself, \"escort\" it: it is almost certainly sitting on food you cannot smell yet. Cross the midline only to \"escort\" a skimmer that has been stationary for a whole turn. Poison: if anything reads poison inside 1.00 m, \"avoid\" at throttle 1.0 for one turn, then go back to your zone with standoff_m 1.8."
+    },
+    "player": "ply_bac48eb1-662e-44f8-973d-f3e016dccf5d"
+  },
+  {
+    "name": "walker-waterworld-shoal",
+    "run": "/bin/walker-waterworld-player",
+    "env": {
+      "PLAYER_POLICY_LABEL": "shoal",
+      "PLAYER_SCRIPTED": "shoal"
+    }
+  },
+  {
+    "name": "walker-waterworld-drifter",
+    "run": "/bin/walker-waterworld-player",
+    "env": {
+      "PLAYER_POLICY_LABEL": "drifter",
+      "PLAYER_SCRIPTED": "drifter"
+    }
+  }
+]
