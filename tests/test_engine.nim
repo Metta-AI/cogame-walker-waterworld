@@ -127,6 +127,27 @@ block interBatchFloor:
   check("the inter-batch floor is honoured", elapsed >= 250, $elapsed)
   check("and it is BOUNDED", elapsed <= 2000, $elapsed)
 
+  # The floor the engine actually sleeps, through its own entry point.
+  engine.lastBatchStart = getMonoTime()
+  let realStart = getMonoTime()
+  let sleptMs = engine.waitOutInterBatchFloor(sim, 0, 0)
+  let realElapsed = (getMonoTime() - realStart).inMilliseconds.int
+  check("the engine's own floor sleeps the spacing", sleptMs >= 250, $sleptMs)
+  check("and it does not overshoot it", realElapsed <= 2000, $realElapsed)
+
+  # STOP-INTERRUPTIBLE: with the wall clock already spent, the floor gives up
+  # after a slice instead of holding the episode past its own deadline.
+  sim.config.turnSpacingMs = 3000
+  sim.config.wallClockBudgetSeconds = 60
+  engine.lastBatchStart = getMonoTime()
+  let stopStart = getMonoTime()
+  let cutShort = engine.waitOutInterBatchFloor(sim, 0, 60)
+  let stopElapsed = (getMonoTime() - stopStart).inMilliseconds.int
+  check("a floor that outlives the wall-clock stop is cut short",
+    cutShort < 1000, $cutShort)
+  check("and the caller comes back inside one slice", stopElapsed < 1000,
+    $stopElapsed)
+
 block deadlineArithmetic:
   let config = defaultGameConfig()
   check("attempt1 + retry fits inside the per-turn budget",

@@ -275,6 +275,40 @@ proc batchBodies*(
         "the JSON object described above, starting with '{'.")
     result.add(userMessage(engine.seats[seat].prompt, user))
 
+const FloorSliceMs = 100
+  ## The inter-batch floor sleeps in slices this long so the engine's
+  ## wall-clock stop is never more than one slice late (see `turn`).
+
+proc waitOutInterBatchFloor*(
+  engine: var DecisionEngine, sim: SimServer, turnIndex, elapsedSeconds: int
+): int =
+  ## Holds the START of consecutive batches `turnSpacingMs` apart, which pins
+  ## the episode at <= 20 req/min against the sidecar's 30. Returns the
+  ## milliseconds actually slept; the cert fixture sets the spacing to 0, so
+  ## offline runs pay nothing.
+  ##
+  ## STOP-INTERRUPTIBLE, which is what the design note asks for: the floor is up
+  ## to 12 s and the engine's wall-clock stop is only evaluated between ticks,
+  ## so one `os.sleep` for the whole floor would carry the episode up to a floor
+  ## past its own deadline. It sleeps in FloorSliceMs slices instead and cuts
+  ## the floor short the moment the wall clock has run out -- the LLM cannot
+  ## help an episode that is already over.
+  if not engine.batchStarted or sim.config.turnSpacingMs <= 0:
+    return 0
+  let since = (getMonoTime() - engine.lastBatchStart).inMilliseconds.int
+  let floorMs = min(sim.config.turnSpacingMs, sim.config.turnSpacingMs - since)
+  if floorMs <= 0:
+    return 0
+  let floorStart = getMonoTime()
+  while result < floorMs:
+    sleep(min(FloorSliceMs, floorMs - result))
+    result = (getMonoTime() - floorStart).inMilliseconds.int
+    if elapsedSeconds + (result + 999) div 1000 >=
+        sim.config.wallClockBudgetSeconds:
+      echo "waterworld: wall-clock stop reached inside the inter-batch floor ",
+        "on turn ", turnIndex, "; cutting the floor short after ", result, " ms"
+      break
+
 proc turn*(
   engine: var DecisionEngine,
   sim: SimServer,
@@ -338,13 +372,8 @@ proc turn*(
       engine.haveIntent[seat] = true
 
   # --- the rate floor -----------------------------------------------------
-  # Hold the START of consecutive batches `turnSpacingMs` apart, which pins the
-  # episode at <= 20 req/min against the sidecar's 30. A bounded sleep; the cert
-  # fixture sets it to 0, so offline runs pay nothing.
-  if open.len > 0 and engine.batchStarted and sim.config.turnSpacingMs > 0:
-    let since = (getMonoTime() - engine.lastBatchStart).inMilliseconds.int
-    if since < sim.config.turnSpacingMs:
-      sleep(min(sim.config.turnSpacingMs, sim.config.turnSpacingMs - since))
+  if open.len > 0:
+    discard engine.waitOutInterBatchFloor(sim, turnIndex, elapsedSeconds)
   if open.len > 0:
     engine.lastBatchStart = getMonoTime()
     engine.batchStarted = true
