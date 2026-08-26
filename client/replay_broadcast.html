@@ -3001,6 +3001,30 @@ body[data-embed] #board { top: 0; height: 100%; }
     }
   }
 
+  // The ray colours are the one thing on the tank a first-time viewer cannot
+  // infer, so the legend rides the banner lane for the first 5 s of play and
+  // then gets out of the way. It is built once, lazily, because the game block
+  // runs before the chrome has finished laying the lane out.
+  var legendEl = null;
+  function ensureLegend(s) {
+    if (!legendEl) {
+      var lane = $('bannerlane');
+      if (!lane) return;
+      legendEl = document.createElement('div');
+      legendEl.id = 'ww-legend';
+      legendEl.innerHTML =
+        '<span><i class="food"></i>plankton</span>' +
+        '<span><i class="poison"></i>poison</span>' +
+        '<span><i class="cog"></i>skimmer</span>' +
+        '<span><i class="rock"></i>rock</span>';
+      lane.appendChild(legendEl);
+    }
+    if (legendUntil < 0) {
+      legendUntil = Math.max(0, s.st || 0) + 5 * (CTX.C.FPS || 24);
+    }
+    legendEl.classList.toggle('on', (s.t || 0) <= legendUntil);
+  }
+
   var seenIntents = {};
   function wwFrame(s, ctx, jumped) {
     CTX = ctx;
