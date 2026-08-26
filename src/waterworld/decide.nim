@@ -285,9 +285,12 @@ proc turn*(
   ## Runs ONE decision turn and installs each seat's intent. Returns the replay
   ## chat records this turn produced. NEVER raises: every failure path ends in a
   ## legal intent.
-  let
-    budget = initDuration(milliseconds = max(1, sim.config.turnBudgetMs))
-    turnStart = getMonoTime()
+  let budget = initDuration(milliseconds = max(1, sim.config.turnBudgetMs))
+  ## The per-turn budget covers the ATTEMPTS, not the inter-batch floor: the
+  ## floor is measured start-to-start and is already accounted for separately in
+  ## the episode arithmetic, so a long floor must not eat the retry. Re-taken
+  ## after the floor sleep below.
+  var turnStart = getMonoTime()
   ## Throttle state is PER TURN: a daily-token 429 on turn k says nothing about
   ## turn k+1 (the sidecar's window may have rolled), so the flag is cleared
   ## here and only suppresses this turn's retry.
@@ -345,6 +348,10 @@ proc turn*(
   if open.len > 0:
     engine.lastBatchStart = getMonoTime()
     engine.batchStarted = true
+  # The attempts get the WHOLE per-turn budget: `attempt1Ms + retryMs` is sized
+  # to fit inside it (asserted by test_engine's deadlineArithmetic), and a turn
+  # that had just slept out a full spacing would otherwise skip its own retry.
+  turnStart = getMonoTime()
 
   # --- up to two PARALLEL batches -----------------------------------------
   var attempt = 0
