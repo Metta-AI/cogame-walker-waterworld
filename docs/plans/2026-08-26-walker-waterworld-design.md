@@ -1716,3 +1716,18 @@ Half of that is true of the tree and half is not:
   generator and a committed source sheet — not solid-colour placeholders and not a runtime
   download — but the note's "no downloaded art" sentence should read "no art downloaded at run
   time": the sheets were generated once, offline, and are in the repo.
+
+### Files the "kept verbatim" table lists that this repo does not have
+
+The fork table lists a number of coworld-ctf files as kept. These are **absent**, deliberately,
+and nothing in the tree references any of them (`grep` over `.nim`, `.md`, `.yml`, `.sh`, `.json`
+outside `docs/plans/` returns no hits — they are deletions, not dangling references):
+
+| file | why it is gone |
+|---|---|
+| `client/league_replayer.html` | the platform serves the static wasm bundle; the league replayer page has no route here. |
+| `tools/expand_replay.nim`, `tools/extract_events.nim` | replaced by one stdlib-only `tools/replay_summary.py`, which needs no Nim toolchain to read a production replay (AGENTS.md documents the substitution; `test_replay.nim` exercises it). |
+| `tools/record_fixture.sh` | the only replay CI produces comes from `tools/ci/docker_smoke.sh`, and `wasm-viewer` consumes that artifact; there is no hand-recorded fixture to keep current. |
+| `flake.nix`, `flake.lock` | the toolchain is pinned by `nimby.lock` + the Dockerfile, which CI and the image both use; a second, unexercised pin would drift. |
+| `src/waterworld/labels.nim` | ctf's HUD label composition carried lives and perks. Waterworld's labels are baked in `global.nim` (`textSpriteIdFor`) with no per-seat life state to compose. |
+| `data/darkbg.png`, `data/ascii.png`, `data/atlas/*` | ctf's atlas-driven sprite path. Waterworld bakes its sprites (`global.nim`) and preloads only what it draws; an unused atlas would be dead weight in the emscripten preload. |
