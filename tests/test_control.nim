@@ -189,12 +189,91 @@ block stunAndPhaseForceCoast:
     ctl.thrustCommand(sim, 0, sim.frameFor(0), intent) == 0'u8)
 
 block poisonRepulsion:
-  ## The repulsion term is RADIAL, so it cannot sidestep a bloom that sits
-  ## exactly on the line to the goal — it can only slow the approach. That is
-  ## why `avoid` exists as its own mode. What the term DOES do, and what is
-  ## asserted here, is hold a skimmer farther off a bloom beside its path the
-  ## wider its standoff is.
+  ## The repulsion term is RADIAL, so on a bloom that sits exactly on the line
+  ## to the goal it cannot sidestep — it can only BRAKE. Both halves are
+  ## asserted: the on-path half below (the design note's §Tests 4: the skimmer
+  ## does not eat a bloom it is driving straight at) and the beside-the-path
+  ## half after it (a wider standoff holds it farther off).
+  ##
+  ## On-path arithmetic, which is what says WHICH standoffs can hold:
+  ##   * the repulsion weight is RepulsionGain*(s-d)/s = 1.5*(s-d)/s, so the
+  ##     combined steer REVERSES once d < s/3 — the skimmer flees;
+  ##   * contact is at SkimmerRadius + PoisonRadius = 0.40 m, so a standoff
+  ##     under 1.20 m cannot even begin to flee before it has been eaten;
+  ##   * at throttle 128 the approach speed is 0.5 * 3.24 m/s = 67 500 µm/tick
+  ##     and level 7 decelerates at 5 208 µm/tick², so stopping takes
+  ##     v²/2a = 0.44 m of the s/3 - 0.40 m the flee has to work with.
+  ## That needs s ≳ 2.5 m — which is exactly MaxStandoffMm, and the measurement
+  ## below (0.487 m of clearance at 2.5 m, eaten at 1.8 m) matches it. So the
+  ## honest on-path assertion is "the widest standoff holds", not "every
+  ## standoff ≥ 0.5 m holds"; the note's §Tests 4 wording is corrected in the
+  ## errata of docs/plans/2026-08-26-walker-waterworld-design.md.
+  proc deadAhead(standoffMm: int32): tuple[survived: bool, closest: int64] =
+    ## The waypoint is straight THROUGH a pinned bloom: only the repulsion term
+    ## can keep the skimmer off it.
+    var sim = seatedSim()
+    var ctl = initControlState()
+    var intent = defaultIntent()
+    intent.mode = mSweep
+    intent.standoffMm = standoffMm
+    intent.throttle255 = 128
+    intent.waypointXUm = 6_000_000
+    intent.waypointYUm = 7_400_000
+    for f in 0 ..< FoodCount:
+      sim.food[f].state = psRespawning
+    for q in 0 ..< PoisonCount:
+      sim.poison[q].state = psRespawning
+    for i in 1 ..< SkimmerCount:
+      sim.skimmers[i].x = SkimmerRadius
+      sim.skimmers[i].y = SkimmerRadius
+    sim.skimmers[0].x = 3_000_000
+    sim.skimmers[0].y = 7_400_000
+    sim.skimmers[0].vx = 0
+    sim.skimmers[0].vy = 0
+    sim.poison[0].state = psLive
+    sim.poison[0].x = 4_500_000
+    sim.poison[0].y = 7_400_000
+    sim.poison[0].speed = 0
+    result = (true, high(int64))
+    for _ in 0 ..< 48:
+      var cmds: array[SkimmerCount, uint8]
+      cmds[0] = ctl.thrustCommand(sim, 0, sim.frameFor(0), intent)
+      # Pin the bloom's POSITION — this block is about the steering, not the
+      # drift — but never its STATE: being eaten is what is under test.
+      sim.poison[0].x = 4_500_000
+      sim.poison[0].y = 7_400_000
+      sim.step(cmds)
+      result.closest = min(result.closest, isqrt(distSqUm(
+        sim.skimmers[0].x, sim.skimmers[0].y,
+        sim.poison[0].x, sim.poison[0].y)))
+      if sim.poison[0].state != psLive:
+        result.survived = false
+        break
+
+  var previous = 0'i64
+  for standoffMm in [0'i32, 500'i32, 900'i32, 1200'i32, 1800'i32, 2500'i32]:
+    let run = deadAhead(standoffMm)
+    echo "dead ahead at standoff ", standoffMm, " mm: bloom ",
+      (if run.survived: "survived" else: "EATEN"), ", closest ", run.closest,
+      " µm"
+    check("a wider standoff never approaches a dead-ahead bloom closer " &
+      "than a narrower one", run.closest >= previous,
+      $standoffMm & " mm: " & $run.closest & " vs " & $previous)
+    previous = run.closest
+    if standoffMm == 0:
+      # Non-vacuity: without a standoff this run DOES eat the bloom, so the
+      # survival below is the repulsion's doing and not the geometry's.
+      check("with no standoff at all the skimmer eats the dead-ahead bloom",
+        not run.survived, $run.closest)
+    if standoffMm == MaxStandoffMm:
+      check("at the widest standoff the skimmer does not eat a bloom it is " &
+        "driving straight at", run.survived, $run.closest)
+      check("and it never touches it", run.closest >
+        int64(SkimmerRadius + PoisonRadius), $run.closest)
+
   proc closestApproach(standoffMm: int32): int64 =
+    ## The other half: the bloom sits 0.55 m OFF the path, where the radial
+    ## term CAN hold the skimmer wide.
     var sim = seatedSim()
     var ctl = initControlState()
     var intent = defaultIntent()

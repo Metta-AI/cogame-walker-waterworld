@@ -1646,3 +1646,33 @@ smoke) is inviolable: if it fails, the physics or a build flag changed — fix t
 - **Audio, 3D, camera cuts, slow-motion replays**, and any downloaded art asset.
 - **Persistent memory across episodes** (no notes carried between runs) and any tournament structure
   beyond the platform league.
+
+---
+
+## Errata — where the shipped tree deviates from this note
+
+This note is kept **verbatim** as the record of the design as written before the build. Where
+the tree disagrees with it, the tree is authoritative and an entry below says what the tree
+does and why. Every deviation is also documented at its own site in code or in a test comment;
+this section exists so the note itself stops asserting things that are not true of the tree.
+Opened during review round 1 (2026-08-26).
+
+### §Tests 4 — poison repulsion holds a dead-ahead bloom at the WIDEST standoff, not at every `standoff_m ≥ 0.5`
+
+§Tests 4 asks for "poison repulsion strictly increases the distance to a stationary poison over
+48 ticks for every `standoff_m ≥ 0.5`". The shipped repulsion term is **radial**
+(`src/waterworld/control.nim:166-187`): it is antiparallel to the goal pull when the bloom sits
+on the line to the goal, so it can brake but never sidestep. `avoid` is the mode that sidesteps.
+
+What the tree therefore provides, and what `tests/test_control.nim`'s `poisonRepulsion` block
+asserts:
+
+- **On the path.** The combined steer reverses once `d < standoff/3` (weight
+  `1.5·(s−d)/s ≥ 1`), so the flee only starts outside the 0.40 m contact radius for
+  `standoff > 1.20 m`, and the braking distance at throttle 128 (0.44 m) needs
+  `standoff ≳ 2.5 m`. Measured: eaten at 0/0.5/0.9/1.2/1.8 m, survives at 2.5 m
+  (`MaxStandoffMm`) with 0.487 m of clearance. The test asserts the closest approach is
+  monotone in the standoff over all six values, that 2.5 m does not eat the bloom and never
+  touches it, and — for non-vacuity — that 0 m does eat it.
+- **Beside the path.** With the bloom 0.55 m off the line, a wider standoff strictly holds the
+  skimmer farther off, and 1.8 m already clears the contact radius.
