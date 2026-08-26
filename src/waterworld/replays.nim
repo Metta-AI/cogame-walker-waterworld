@@ -217,7 +217,8 @@ proc applyReplayEvents(replay: var ReplayPlayer, sim: var SimServer) =
       replay.data.leaves[replay.leaveIndex].time <= time:
     let leave = replay.data.leaves[replay.leaveIndex]
     ## A leave does NOT shift the command array: the skimmers are fixed for the
-    ## whole episode and the recorded bytes are indexed BY SEAT, so deleting a
+    ## whole episode and the recorded bytes are indexed BY SKIMMER INDEX (the
+    ## index `sim.step` consumes -- see server.nim's write loop), so deleting a
     ## row would silently re-point every later byte at the wrong skimmer.
     if int(leave.player) >= 0 and int(leave.player) < sim.players.len:
       sim.removePlayerAt(int(leave.player))
