@@ -89,12 +89,15 @@ block modesDoWhatTheySay:
       &"tick {tick}: {speed} > {lastSpeed}")
     lastSpeed = speed
     # Nim's `div` truncates toward zero, so drag cannot take the last unit off:
-    # a held skimmer settles at a few µm/tick, which is a fraction of a
-    # millimetre per second. That is a standstill, not a drift.
-    if speed < 100.0 and stopped < 0:
+    # `v - (v*39) div 1024` leaves any |v| < 1024/39 = 26.3 µm/tick untouched,
+    # and the servo cannot either (level = round(|a|*7/5208) is 0 below 372
+    # µm/tick). 27 µm/tick is therefore the smallest bound the arithmetic
+    # admits, and it is what is asserted: an exact zero is unreachable. The
+    # shipped controller settles at 18 µm/tick = 0.43 mm/s.
+    if speed < 27.0 and stopped < 0:
       stopped = tick
-  check("hold brakes to a standstill (under 0.01 m/s) within 96 ticks",
-    stopped >= 0, $lastSpeed)
+  check("hold brakes to the 27 µm/tick standstill the arithmetic allows " &
+    "within 96 ticks", stopped >= 0, $lastSpeed)
 
   # SWEEP drives at the waypoint.
   var sweep = defaultIntent()
