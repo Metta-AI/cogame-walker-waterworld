@@ -1731,3 +1731,32 @@ outside `docs/plans/` returns no hits — they are deletions, not dangling refer
 | `flake.nix`, `flake.lock` | the toolchain is pinned by `nimby.lock` + the Dockerfile, which CI and the image both use; a second, unexercised pin would drift. |
 | `src/waterworld/labels.nim` | ctf's HUD label composition carried lives and perks. Waterworld's labels are baked in `global.nim` (`textSpriteIdFor`) with no per-seat life state to compose. |
 | `data/darkbg.png`, `data/ascii.png`, `data/atlas/*` | ctf's atlas-driven sprite path. Waterworld bakes its sprites (`global.nim`) and preloads only what it draws; an unused atlas would be dead weight in the emscripten preload. |
+
+### §Tests 1 — the thrust ramp is 1.8 … 2.1 m/s, and the terminal speed is 3.16 m/s
+
+The note asks for `2.6 … 3.3 m/s` after 24 ticks at level 7. That band is arithmetically
+impossible from the note's own constants: with `a = MaxThrustAccel = 5 208` µm/tick² and drag
+`r = 985/1024`, `v₂₄ = a·r·(1 − r²⁴)/(1 − r) = 79 738` µm/tick = **1.914 m/s**, and the asymptote
+is `a·r/(1 − r) = 131 540` µm/tick = **3.157 m/s** (under the 3.24 m/s clamp). `test_physics.nim`
+asserts the ramp at `1.8 … 2.1 m/s` — a **narrower** band than the note's — and adds an assertion
+the note does not ask for: held at level 7 the speed settles on `3.15 … 3.25 m/s`. The derivation
+is in the test at the assertion site.
+
+### §Tests 1 — the swept contact test asserts a SUPERSET, not the same answer
+
+The note says the swept test and the end-position test "return the same answer". They cannot: a
+swept test exists precisely to catch contacts an end-position test misses. `test_physics.nim`
+asserts the swept set is a **superset** of the end-position set over 50 000 pairs
+(`endOnly == 0`), plus a guard that the swept-only contacts were genuinely close, so the
+assertion cannot pass vacuously.
+
+### §Baselines — the shipped `BaselineParams` are the sweep's pick, not the note's guess
+
+The note gives `pairJoinRadiusUm 3 200 000`, `standoffMilli 1 200`, `leadTicks 8`. Those were the
+starting guess. `tools/tune_baselines.nim` swept a 4×4×4 grid and the shipped defaults are its
+winner — `2 400 000`, `1 800`, `12` (mean score 180.9 against the guess's 154.6). The sweep's pick
+and the grid it came from are recorded in `tools/ci/baseline_tuning.json`, and
+`tests/test_tuning.nim` asserts the shipped defaults still equal the recorded pick **and** that
+the pick is a cell the grid actually covered. This is the note working as intended (§Baselines
+says the sweep moves these three numbers), but the note's literals are stale and the tree's are
+authoritative.

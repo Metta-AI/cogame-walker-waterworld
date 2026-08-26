@@ -3,6 +3,9 @@
 Gameplay rules live in [docs/RULES.md](docs/RULES.md); the wire is
 [docs/PROTOCOL.md](docs/PROTOCOL.md); the design note this repo implements is
 [docs/plans/2026-08-26-walker-waterworld-design.md](docs/plans/2026-08-26-walker-waterworld-design.md).
+That note is kept **verbatim** as the design as written before the build; where the
+tree deviates from it, the **Errata** section at its end says so and the tree
+wins. Read the errata before treating any number in the note as current.
 This file covers the things that are easy to get wrong.
 
 ## The determinism boundary is grep-enforced
