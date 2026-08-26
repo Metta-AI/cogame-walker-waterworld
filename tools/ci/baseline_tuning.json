@@ -2,13 +2,54 @@
   "swept": "tools/tune_baselines.nim",
   "note": "The grid harness's pick, not a guess. `tools/tune_baselines.nim` plays four shoals over a bounded matrix of these three numbers across a seed panel and prints the table; this file records the winning cell and tests/test_tuning.nim asserts the shipped DefaultBaselineParams still equal it. THE PHYSICS CONSTANTS IN sim_types.nim ARE NOT SWEPT: if four shoals cannot capture, these three numbers are wrong, not the tank.",
   "grid": {
-    "pairJoinRadiusUm": [2400000, 2800000, 3200000, 3600000],
-    "standoffMilli": [900, 1200, 1500, 1800],
-    "leadTicks": [4, 6, 8, 12]
+    "pairJoinRadiusUm": [
+      2400000,
+      2800000,
+      3200000,
+      3600000
+    ],
+    "standoffMilli": [
+      900,
+      1200,
+      1500,
+      1800
+    ],
+    "leadTicks": [
+      4,
+      6,
+      8,
+      12
+    ]
   },
   "pick": {
-    "pairJoinRadiusUm": 3200000,
-    "standoffMilli": 1200,
-    "leadTicks": 8
+    "pairJoinRadiusUm": 2400000,
+    "standoffMilli": 1800,
+    "leadTicks": 12
+  },
+  "measured": {
+    "seeds": 20,
+    "shoalSeedsAt8": 20,
+    "shoalMeanScore": 175.6,
+    "drifterMeanScore": 110.73,
+    "mixedSeedsAt4": 20,
+    "recordedBy": "tests/test_baselines.nim, the release build, at GV1, with the sweep's pick",
+    "designFloor": {
+      "shoalSeedsAt8": 18,
+      "shoalMeanScore": 70.0,
+      "mixedSeedsAt4": 16,
+      "note": "The design note's own anti-regression pin: four shoals reach at least 8 captures on at least 18 of 20 seeds with a mean score above +70, and a 2-shoal/2-drifter mix reaches at least 4 captures on at least 16 of 20. The measured panel above clears all three by a wide margin; both are asserted, so a regression fails against the recorded measurement AND against the design's floor."
+    }
+  },
+  "sweep": {
+    "seeds": 12,
+    "cells": 64,
+    "winner_mean_score": 180.92,
+    "design_first_guess": {
+      "pairJoinRadiusUm": 3200000,
+      "standoffMilli": 1200,
+      "leadTicks": 8,
+      "mean_score": 154.6
+    },
+    "note": "The design note proposed the first-guess cell as if it were the sweep's pick; it is not. The sweep was run and its winner is what ships."
   }
 }

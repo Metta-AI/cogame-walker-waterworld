@@ -300,14 +300,15 @@ type
     holdersMask*: uint8    ## bit i set = skimmer i took part in this capture
 
 const
+  # Fixed quadrant centres, at rest, in SIM coordinates (origin top-left, y
+  # DOWN). The view metres a policy is told are, in order: (3.00, 2.00),
+  # (9.00, 2.00), (3.00, 6.00), (9.00, 6.00).
   SkimmerSpawnUm*: array[SkimmerCount, tuple[x, y: int32]] = [
-    (3_000_000'i32, 6_000_000'i32),   ## view (3.00, 2.00)
-    (9_000_000'i32, 6_000_000'i32),   ## view (9.00, 2.00)
-    (3_000_000'i32, 2_000_000'i32),   ## view (3.00, 6.00)
-    (9_000_000'i32, 2_000_000'i32)    ## view (9.00, 6.00)
+    (3_000_000'i32, 6_000_000'i32),
+    (9_000_000'i32, 6_000_000'i32),
+    (3_000_000'i32, 2_000_000'i32),
+    (9_000_000'i32, 2_000_000'i32)
   ]
-    ## Fixed quadrant centres, at rest, in SIM coordinates (origin top-left,
-    ## y DOWN). The view metres in the comments are what a policy is told.
 
 proc thrustMicroFor*(level: int32): int64 {.inline.} =
   ## The thrust bill for one tick at one level: level² * 1000 / 49, so level 7

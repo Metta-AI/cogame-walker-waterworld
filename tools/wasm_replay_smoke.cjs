@@ -50,9 +50,9 @@ const Module = {
 
 function readStageNote() {
   try {
-    const length = Module._ctf_stage_len ? Module._ctf_stage_len() : 0;
+    const length = Module._waterworld_stage_len ? Module._waterworld_stage_len() : 0;
     if (!length) return '';
-    const pointer = Module._ctf_stage_ptr();
+    const pointer = Module._waterworld_stage_ptr();
     return Buffer.from(Module.HEAPU8.subarray(pointer, pointer + length)).toString('utf8');
   } catch (ignored) {
     return '';
@@ -60,9 +60,9 @@ function readStageNote() {
 }
 
 function readRuntimeError() {
-  const length = Module._ctf_error_len();
+  const length = Module._waterworld_error_len();
   if (length) {
-    const pointer = Module._ctf_error_ptr();
+    const pointer = Module._waterworld_error_ptr();
     return Buffer.from(Module.HEAPU8.subarray(pointer, pointer + length)).toString('utf8');
   }
   const stage = readStageNote();
@@ -75,32 +75,32 @@ function run() {
   const bytes = fs.readFileSync(replayPath);
   const pointer = Module._malloc(bytes.length);
   Module.HEAPU8.set(bytes, pointer);
-  const loaded = Module._ctf_load_replay(pointer, bytes.length);
+  const loaded = Module._waterworld_load_replay(pointer, bytes.length);
   Module._free(pointer);
   if (loaded !== 1) {
-    console.error('FAIL: ctf_load_replay rejected ' + path.basename(replayPath) +
+    console.error('FAIL: waterworld_load_replay rejected ' + path.basename(replayPath) +
       '\n' + readRuntimeError());
     process.exit(1);
   }
-  if (Module._ctf_packet_len() <= 0) {
+  if (Module._waterworld_packet_len() <= 0) {
     console.error('FAIL: first frame produced an empty packet');
     process.exit(1);
   }
-  if (Module._ctf_mismatch_tick() !== -1) {
-    console.error('FAIL: replay hash mismatch at tick ' + Module._ctf_mismatch_tick() +
+  if (Module._waterworld_mismatch_tick() !== -1) {
+    console.error('FAIL: replay hash mismatch at tick ' + Module._waterworld_mismatch_tick() +
       ' — the wasm sim diverged from the recording');
     process.exit(1);
   }
   let packetBytes = 0;
   for (let i = 0; i < frameBudget; i++) {
-    if (Module._ctf_frame() !== 1) {
-      console.error('FAIL: ctf_frame died at frame ' + i + '\n' + readRuntimeError());
+    if (Module._waterworld_frame() !== 1) {
+      console.error('FAIL: waterworld_frame died at frame ' + i + '\n' + readRuntimeError());
       process.exit(1);
     }
-    packetBytes += Module._ctf_packet_len();
+    packetBytes += Module._waterworld_packet_len();
   }
-  if (Module._ctf_mismatch_tick() !== -1) {
-    console.error('FAIL: replay hash mismatch at tick ' + Module._ctf_mismatch_tick() +
+  if (Module._waterworld_mismatch_tick() !== -1) {
+    console.error('FAIL: replay hash mismatch at tick ' + Module._waterworld_mismatch_tick() +
       ' after ' + frameBudget + ' frames');
     process.exit(1);
   }
@@ -111,6 +111,6 @@ function run() {
   process.exit(0);
 }
 
-const bundlePath = path.join(distDir, 'ctf_replay.js');
+const bundlePath = path.join(distDir, 'waterworld_replay.js');
 new Function('Module', 'require', '__filename', '__dirname',
   fs.readFileSync(bundlePath, 'utf8'))(Module, require, bundlePath, distDir);

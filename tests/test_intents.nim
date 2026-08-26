@@ -52,6 +52,14 @@ block waypointObject:
 
 block targetSpellings:
   check("plankton F2 parses", parse("""{"target":"plankton F2"}""").target == 1)
+  check("the RECORDED target is canonical and inside its 4-rune cap", (block:
+    var intent = defaultIntent()
+    intent.target = 1
+    parseJson(intent.boundedIntentRecord(0, 0, 0)){"target"}.getStr().runeLen <= 4))
+  check("the RECORDED partner is canonical and inside its 8-rune cap", (block:
+    var intent = defaultIntent()
+    intent.partner = 3
+    parseJson(intent.boundedIntentRecord(0, 0, 0)){"partner"}.getStr().runeLen <= 8))
   check("a bare number parses", parse("""{"target":"2"}""").target == 1)
   check("an integer target parses", parse("""{"target":3}""").target == 2)
   check("an out-of-set id is none", parse("""{"target":"F9"}""").target == -1)
@@ -93,7 +101,10 @@ block nonFiniteAndAbsent:
     $intent.throttle255)
 
 block outOfRangeClamps:
-  let intent = parse("""{"lead_ticks":9000,"standoff_m":50.0,"throttle":9.5,
+  # NB 50.0 and 9.5 would be read as CENTIMETRES and a PERCENTAGE by the
+  # documented tolerances, so the out-of-range case uses values those rules
+  # cannot claim: 5.0 m of standoff and 150 % of throttle.
+  let intent = parse("""{"lead_ticks":9000,"standoff_m":5.0,"throttle":150,
     "waypoint":[-40.0,900.0]}""")
   check("lead_ticks clamps to 24", intent.leadTicks == 24, $intent.leadTicks)
   check("standoff clamps to 2.5 m", intent.standoffMm == MaxStandoffMm,

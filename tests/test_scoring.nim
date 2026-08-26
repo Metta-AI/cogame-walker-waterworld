@@ -1,7 +1,7 @@
 ## The scoring formula and its sign, and the rules that make a capture a
 ## capture: two skimmers, same tick, and a nibble that cannot be farmed.
 
-import std/[json, math, strformat, strutils]
+import std/[json, math, strformat]
 
 import helpers
 import waterworld/[sim, roster]
@@ -44,12 +44,11 @@ block simMatchesTheFormula:
 block captureNeedsExactlyTwo:
   # Park ONE skimmer on a plankton: a nibble, never a capture.
   var sim = seatedSim()
-  for f in 0 ..< FoodCount:
-    sim.food[f].state = psRespawning
-    sim.food[f].timer = int32(sim.config.respawnTicks)
-  for q in 0 ..< PoisonCount:
-    sim.poison[q].state = psRespawning
-    sim.poison[q].timer = 30_000'i32
+  # ONE plankton in the water and no blooms: `poisonCount` 0 is how a particle
+  # leaves play legally — an out-of-range respawn timer would (rightly) trip the
+  # invariant guard.
+  sim.config.foodCount = 1
+  sim.config.poisonCount = 0
   sim.food[0].state = psLive
   sim.food[0].x = 4_000_000
   sim.food[0].y = 4_000_000
@@ -80,12 +79,8 @@ block captureNeedsExactlyTwo:
 block twoAndThreeBothPayOneCapture:
   for holders in 2 .. 3:
     var sim = seatedSim()
-    for f in 0 ..< FoodCount:
-      sim.food[f].state = psRespawning
-      sim.food[f].timer = 30_000'i32
-    for q in 0 ..< PoisonCount:
-      sim.poison[q].state = psRespawning
-      sim.poison[q].timer = 30_000'i32
+    sim.config.foodCount = 1
+    sim.config.poisonCount = 0
     sim.food[0].state = psLive
     sim.food[0].timer = 0
     sim.food[0].x = 4_000_000
@@ -112,12 +107,8 @@ block twoAndThreeBothPayOneCapture:
 
 block poisonCosts:
   var sim = seatedSim()
-  for f in 0 ..< FoodCount:
-    sim.food[f].state = psRespawning
-    sim.food[f].timer = 30_000'i32
-  for q in 0 ..< PoisonCount:
-    sim.poison[q].state = psRespawning
-    sim.poison[q].timer = 30_000'i32
+  sim.config.foodCount = 0
+  sim.config.poisonCount = 1
   sim.poison[0].state = psLive
   sim.poison[0].timer = 0
   sim.poison[0].x = 4_000_000
@@ -176,12 +167,8 @@ block resultsShape:
 block targetEndsTheEpisode:
   var sim = seatedSim(maxTicks = 1728)
   sim.config.captureTarget = 1
-  for f in 0 ..< FoodCount:
-    sim.food[f].state = psRespawning
-    sim.food[f].timer = 30_000'i32
-  for q in 0 ..< PoisonCount:
-    sim.poison[q].state = psRespawning
-    sim.poison[q].timer = 30_000'i32
+  sim.config.foodCount = 1
+  sim.config.poisonCount = 0
   sim.food[0].state = psLive
   sim.food[0].timer = 0
   sim.food[0].x = 4_000_000

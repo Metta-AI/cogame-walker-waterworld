@@ -3,7 +3,7 @@
 ## amd64 server and the emscripten/wasm32 browser build producing the SAME hash
 ## chain from the same seed and the same command bytes.
 
-import std/[json, math, os, random, strutils]
+import std/[json, math, os, strutils]
 
 import helpers
 import waterworld/[sim, trig, tank]
@@ -52,7 +52,11 @@ block oneBitMatters:
   check("a one-unit command-byte change changes the chain",
     perturbed[^1] != run.hashes[^1])
 
-# (c) the committed golden fixture pins the hash at every 48th tick.
+# (c) The committed golden fixture pins the hash at every 48th tick. It is a
+# regression pin on the sim, the controller AND the `shoal` baseline together,
+# because the log it replays is the one that baseline produces: re-mint it with
+# WATERWORLD_WRITE_GOLDEN=1 whenever any of the three legitimately changes, and
+# never to make a red gate go green.
 block golden:
   var sim = seatedSim()
   let run = sim.runScripted(blShoal)
@@ -194,10 +198,7 @@ block seededDraws:
 block drawCounter:
   var one = seatedSim()
   let run = one.runScripted(blShoal, ticks = 600)
-  var two = initSimServer(testConfig())
-  two.gameEventLoggingEnabled = false
-  for seat in 0 ..< SkimmerCount:
-    discard two.addPlayer("policy-" & $seat, seat, "t" & $seat, trusted = true)
+  var two = seatedSim()
   for cmds in run.cmdLog:
     two.step(cmds)
   check("rngDraws is identical between two runs of the same log",

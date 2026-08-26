@@ -20,34 +20,34 @@ let
   resultsPath = work / "results.json"
 
 # --- record a full four-seat scripted episode ------------------------------
-var sim = seatedSim(maxTicks = 720)
+var tank = seatedSim(maxTicks = 720)
 # The fixture is FORCED to carry non-ASCII strings so the UTF-8 path is real,
 # not hypothetical: a policy label and a `say` with a 4-byte emoji in them.
-sim.seatNames[0] = "policy-\u{1F41F}-one"
-var writer = openReplayWriter(replayPath, sim.replayConfigJson())
+tank.seatNames[0] = "policy-\u{1F41F}-one"
+var writer = openReplayWriter(replayPath, tank.replayConfigJson())
 while writer.lastMasks.len < SkimmerCount:
   writer.lastMasks.add(0'u8)
 for seat in 0 ..< SkimmerCount:
-  writer.writeJoin(tickTime(0), seat, sim.players[seat].address, seat,
+  writer.writeJoin(tickTime(0), seat, tank.players[seat].address, seat,
     "t" & $seat)
   writer.writeChat(tickTime(0), seat,
-    registerRecord(seat, sim.skimmerForSeat(seat), "shoal", "scripted", "shoal"))
+    registerRecord(seat, tank.skimmerForSeat(seat), "shoal", "scripted", "shoal"))
 
 var ctl = initControlState()
 var seatIntents = newSeq[SkimmerIntent](SkimmerCount)
 var haveIntent = newSeq[bool](SkimmerCount)
 var turns = 0
 var intentRecords = 0
-while sim.phase != GameOver:
-  let turnTicks = max(1, sim.config.turnTicks)
-  let turnIndex = sim.gameTicksElapsed() div turnTicks
+while tank.phase != GameOver:
+  let turnTicks = max(1, tank.config.turnTicks)
+  let turnIndex = tank.gameTicksElapsed() div turnTicks
   var frames: seq[SensorFrame]
   for seat in 0 ..< SkimmerCount:
-    frames.add(sim.frameFor(sim.skimmerForSeat(seat)))
-  if sim.phase == Playing and sim.gameTicksElapsed() mod turnTicks == 0:
+    frames.add(tank.frameFor(tank.skimmerForSeat(seat)))
+  if tank.phase == Playing and tank.gameTicksElapsed() mod turnTicks == 0:
     inc turns
     for seat in 0 ..< SkimmerCount:
-      var intent = shoalIntent(sim, sim.skimmerForSeat(seat), frames[seat],
+      var intent = shoalIntent(tank, tank.skimmerForSeat(seat), frames[seat],
         turnIndex)
       intent.source = isScripted
       if seat == 0:
@@ -56,31 +56,31 @@ while sim.phase != GameOver:
       seatIntents[seat] = intent
       haveIntent[seat] = true
       let record = intent.boundedIntentRecord(turnIndex, seat,
-        sim.skimmerForSeat(seat))
-      writer.writeChat(tickTime(sim.tickCount), seat, record)
-      sim.pushFeedIntent(record)
+        tank.skimmerForSeat(seat))
+      writer.writeChat(tickTime(tank.tickCount), seat, record)
+      tank.pushFeedIntent(record)
       inc intentRecords
   var cmds: array[SkimmerCount, uint8]
   for i in 0 ..< SkimmerCount:
-    let seat = sim.seatForSkimmer(i)
+    let seat = tank.seatForSkimmer(i)
     let intent = if haveIntent[seat]: seatIntents[seat] else: defaultIntent()
-    cmds[i] = ctl.thrustCommand(sim, i, frames[seat], intent)
+    cmds[i] = ctl.thrustCommand(tank, i, frames[seat], intent)
   for i in 0 ..< SkimmerCount:
-    writer.writeInputMaskChange(tickTime(sim.tickCount), i, cmds[i])
-  sim.step(cmds)
-  writer.writeHash(uint32(sim.tickCount), sim.gameHash())
-writer.writeChat(tickTime(sim.tickCount), 0,
-  "{\"k\":\"result\",\"results\":" & sim.playerResultsJson() & "}")
+    writer.writeInputMaskChange(tickTime(tank.tickCount), i, cmds[i])
+  tank.step(cmds)
+  writer.writeHash(uint32(tank.tickCount), tank.gameHash())
+writer.writeChat(tickTime(tank.tickCount), 0,
+  "{\"k\":\"result\",\"results\":" & tank.playerResultsJson() & "}")
 writer.closeReplayWriter()
-writeFile(resultsPath, sim.playerResultsJson() & "\n")
+writeFile(resultsPath, tank.playerResultsJson() & "\n")
 
 check("the episode wrote a replay", fileExists(replayPath) and
   getFileSize(replayPath) > 1000, $getFileSize(replayPath))
 check("the episode wrote results.json", fileExists(resultsPath))
-check("the episode produced at least one capture", sim.captures >= 1,
-  $sim.captures)
-check("the episode produced at least one nibble", sim.nibbles >= 1,
-  $sim.nibbles)
+check("the episode produced at least one capture", tank.captures >= 1,
+  $tank.captures)
+check("the episode produced at least one nibble", tank.nibbles >= 1,
+  $tank.nibbles)
 
 # --- parse and re-simulate -------------------------------------------------
 let data = parseReplayBytes(readFile(replayPath))
@@ -128,8 +128,8 @@ block reSimulation:
   check("re-simulating reproduced every recorded hash", raised.len == 0, raised)
   check("the re-simulation walked the whole episode", checked > 100, $checked)
   check("the re-simulated final score matches the recording",
-    replaySim.scoreMicro == sim.scoreMicro,
-    $replaySim.scoreMicro & " vs " & $sim.scoreMicro)
+    replaySim.scoreMicro == tank.scoreMicro,
+    $replaySim.scoreMicro & " vs " & $tank.scoreMicro)
 
   # And the shared replay runtime (the one the wasm entry calls) boots, scans
   # and lands on the spectator start.

@@ -8,7 +8,7 @@
 
 import std/[json, math]
 
-import sim_types, sim, sim_state
+import sim_types, sim
 export sim
 
 proc scoreDouble*(sim: SimServer): float =

@@ -193,7 +193,15 @@ proc thrustCommand*(
     rockX = metres(RockCentreX)
     rockY = metres(RockCentreY)
     keepOut = metres(RockRadius) + metres(SkimmerRadius) + RockMarginM
-  if segmentDistanceToPoint(px, py, goal.x, goal.y, rockX, rockY) < keepOut:
+  let fromRock = sqrt((px - rockX) * (px - rockX) + (py - rockY) * (py - rockY))
+  if fromRock < keepOut:
+    # ALREADY inside the keep-out ring: steer straight out. A tangent here would
+    # make the skimmer orbit the rock instead of leaving it, which is a trap the
+    # sim's own push-out cannot break.
+    let outward = normalise(px - rockX, py - rockY)
+    if outward.x != 0.0 or outward.y != 0.0:
+      steer = outward
+  elif segmentDistanceToPoint(px, py, goal.x, goal.y, rockX, rockY) < keepOut:
     let toRock = normalise(rockX - px, rockY - py)
     if toRock.x != 0.0 or toRock.y != 0.0:
       let

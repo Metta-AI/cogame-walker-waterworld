@@ -84,11 +84,14 @@ const
   ZFx = 70
   ZBubble = 80
 
+  # One accent per skimmer, matching the committed nano-banana kits, so the four
+  # read apart at board scale without labels: SKIM-1 hot orange, SKIM-2 cyan,
+  # SKIM-3 violet, SKIM-4 lime.
   SkimmerTints: array[SkimmerCount, tuple[r, g, b: uint8]] = [
-    (255'u8, 122'u8, 47'u8),    ## SKIM-1 hot orange
-    (57'u8, 215'u8, 232'u8),    ## SKIM-2 cyan
-    (176'u8, 114'u8, 240'u8),   ## SKIM-3 violet
-    (217'u8, 226'u8, 74'u8)     ## SKIM-4 lime
+    (255'u8, 122'u8, 47'u8),
+    (57'u8, 215'u8, 232'u8),
+    (176'u8, 114'u8, 240'u8),
+    (217'u8, 226'u8, 74'u8)
   ]
 
 type

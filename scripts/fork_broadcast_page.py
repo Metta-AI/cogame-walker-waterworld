@@ -38,6 +38,7 @@ CUTS = [
     (1452, 1459),   # CSS: the ?viewpanel=0 opt-out
     (1506, 1522),   # markup: #viewpanel
     (1525, 1549),   # markup: #povBadge + #fpv
+    (1641, 1658),   # JS: the eye-level cog art prose the FPV billboards needed
     (1676, 1701),   # JS: the eye-level cog art the FPV billboards blitted
     (1876, 1884),   # JS: the ?viewpanel=0 param
     (2083, 2116),   # JS: ingestFpMap (the FPV tactical minimap bake)
@@ -297,6 +298,12 @@ EDITS = [
     ("    <div class=\"lk-sub\">Bot locker room &middot; Loading replay</div>",
      "    <div class=\"lk-sub\">Four skimmers, one tank, nothing catches alone"
      " &middot; Loading replay</div>", 1),
+    ("UNDER the arena: the four cogs prepping their paintball markers",
+     "UNDER the tank: the four skimmers priming their thrusters", 1),
+    ("    // Keyed on team set AND mode: paintball frames arrive after the first\n"
+     "    // classic-built frame, so the plates rebuild once when the mode is known.",
+     "    // Keyed on team set AND mode: the first frame can land before `ww` has\n"
+     "    // been seen, so the plates rebuild once when the mode is known.", 1),
     ("""      'Filling hoppers with fresh paint…',
       'Pump check: one, two. One, two…',
       'Polishing visors to a mirror shine…',
@@ -322,6 +329,8 @@ BOUNDARIES = {
     1459: "body[data-noviewpanel] #viewpanel",
     1506: "<!-- View controls: zoom the board",
     1525: 'id="povBadge"',
+    1641: "---- eye-level cog art for the EYES PiP billboards ----",
+    1658: "//",
     1676: "var COG_ART = {}, COG_ART_GUN = {};",
     1701: "var cogScratch = document.createElement",
     1876: "?viewpanel=0 hides the #viewpanel overlay",

@@ -965,7 +965,7 @@ html, body {
    PRE-LOAD CURTAIN — THE BOT LOCKER ROOM
    The wasm/replay boot can take seconds; instead of a dark board
    captioned "Warming up", the stage opens on the backstage room
-   UNDER the arena: the four cogs prepping their paintball markers
+   UNDER the tank: the four skimmers priming their thrusters
    in a lamp-lit locker room. The scene is nanobanana-generated
    art (art/lockerroom/ — same warm Ink & Print world as the
    dungeon wall textures): ONE static empty-room plate (bg.jpg)
@@ -1282,24 +1282,6 @@ body[data-embed] #board { top: 0; height: 100%; }
   var renderMomentum = C.renderMomentum;
   var getSpoilers = C.getSpoilers, setSpoilers = C.setSpoilers;
 
-  // ---- eye-level cog art for the EYES PiP billboards ----
-  // The PiP is an eye-level raycaster, so its billboards need art drawn from a
-  // HORIZONTAL camera: soldier_{red,blue}_front.png is the real cog standing on
-  // its wheels, square to the viewer, with the cyan smile visor tilted up toward
-  // the camera (built by scripts/art/build_cvc_front.py, served as a static PNG).
-  //
-  // The plain soldier_{red,blue}.png masters are the TOP-DOWN BOARD sprites (the
-  // cog as seen from ABOVE). Blitting those here is what made a near cog read as
-  // a flat team-coloured plate with the smile squashed onto its bottom edge —
-  // "a head on the ground". No trim or pose math fixes that; it is the wrong
-  // camera. They stay only as the pre-load fallback, ranked behind the front art.
-  //
-  // Loaded once; drawFpvEntity blits the matching team image scaled to the
-  // projected figure so distant cogs shrink like everything else.
-  // Two poses per team: _gun (the cog holding its paintball marker forward at the
-  // camera) is what a LIVE cog shows, since every live cog carries its gun; the
-  // empty-handed master rides as the fallback until that one loads.
-  //
   // COG_BASE, not a root-absolute "/client/…": this page is served from THREE
   // places and a leading slash is only correct at one of them.
   //  - native server, bare:      /client/replay        → "" + /client/…
@@ -1770,8 +1752,8 @@ body[data-embed] #board { top: 0; height: 100%; }
   // 1/3 right — so both team names stay innermost, flanking the clock.
   var sbTeams = null;
   function ensureScorebug(teams) {
-    // Keyed on team set AND mode: paintball frames arrive after the first
-    // classic-built frame, so the plates rebuild once when the mode is known.
+    // Keyed on team set AND mode: the first frame can land before `ww` has
+    // been seen, so the plates rebuild once when the mode is known.
     var key = teams.join(',') + (WW_MODE ? '|ww' : '');
     if (sbTeams === key) return;
     sbTeams = key;
@@ -2892,11 +2874,11 @@ body[data-embed] #board { top: 0; height: 100%; }
 (function () {
   'use strict';
   // Every name here carries a ww- prefix ON PURPOSE. The page's chrome alias
-  // block declares the shared beat builder with a hoisted `var markBeat =
-  // C.markBeat`, so a game-block function of that same name is silently
-  // swallowed by it and the scrubber ends up with unlabelled div markers that
-  // never seek. tests/test_viewer.nim asserts the whole alias list is untouched
-  // below this banner.
+  // block declares the shared beat builder with a hoisted alias of the same
+  // name, so a game-block function of that name is silently swallowed by it and
+  // the scrubber ends up with unlabelled div markers that never seek.
+  // tests/test_viewer.nim asserts the whole alias list is untouched below this
+  // banner, and it looks for DECLARATIONS, so this note must not spell one.
   var CTX = null;
   var placed = {};            // "tick|kind" -> true (dedup)
   var legendUntil = -1;

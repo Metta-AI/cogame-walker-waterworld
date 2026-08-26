@@ -70,12 +70,13 @@ proc pushOutOfRock*(x, y: var int32, clearance: int32) =
 # (MaxSkimmerSpeed + max(PoisonSpeedSet) < SkimmerRadius + PoisonRadius), so the
 # sweep is belt and braces — and testable, which a comment is not.
 #
-# The sweep runs in MILLIMETRES, not micrometres, and that is deliberate: the
-# closest-point-on-segment algebra squares a dot product, and at µm scale
-# `cross*cross` overflows int64 for legal inputs. At mm scale every intermediate
-# stays under 5e10. Truncating to mm is exact integer arithmetic on both builds,
-# and the resolution (1 mm against a 160-240 mm radius) is far finer than the
-# contact it decides. The END-position test below is exact at µm.
+# The sweep runs in DECIMILLIMETRES (0.1 mm), not micrometres, and that is
+# deliberate: the closest-point-on-segment algebra squares a dot product, and at
+# µm scale `cross*cross` overflows int64 for legal inputs. At 0.1 mm scale every
+# intermediate stays under 5e14, comfortably inside int64. Truncating to 0.1 mm
+# is exact integer arithmetic on both builds, and the resolution (0.1 mm against
+# a 160-240 mm radius) is far finer than the contact it decides. The END-position
+# test below is exact at µm.
 
 proc sweptContact*(
   ax0, ay0, ax1, ay1: int32,
@@ -86,15 +87,25 @@ proc sweptContact*(
   ## `radiusSum` of each other at any point during the tick.
   if withinUm(ax1, ay1, bx1, by1, radiusSum):
     return true
-  # Cheap reject: nothing farther than radiusSum + |relative travel| can touch.
+  # TOTALITY GUARD. The sweep is only meaningful for a pair that MOVED by at
+  # most a tick's worth of legal motion; a body that teleported (a particle
+  # respawning at a fresh seeded point) has no swept path at all, and squaring
+  # its tank-sized displacement would overflow. Callers already skip a particle
+  # that respawned this tick — this makes the function total either way.
+  const MaxTravelUm = 2 * MaxSkimmerSpeed
+  if abs(int64(ax1) - int64(ax0)) > MaxTravelUm or
+      abs(int64(ay1) - int64(ay0)) > MaxTravelUm or
+      abs(int64(bx1) - int64(bx0)) > MaxTravelUm or
+      abs(int64(by1) - int64(by0)) > MaxTravelUm:
+    return false
   let
-    r0x = (int64(ax0) - int64(bx0)) div 1000'i64
-    r0y = (int64(ay0) - int64(by0)) div 1000'i64
-    r1x = (int64(ax1) - int64(bx1)) div 1000'i64
-    r1y = (int64(ay1) - int64(by1)) div 1000'i64
+    r0x = (int64(ax0) - int64(bx0)) div 100'i64
+    r0y = (int64(ay0) - int64(by0)) div 100'i64
+    r1x = (int64(ax1) - int64(bx1)) div 100'i64
+    r1y = (int64(ay1) - int64(by1)) div 100'i64
     dx = r1x - r0x
     dy = r1y - r0y
-    rMm = int64(radiusSum) div 1000'i64
+    rMm = int64(radiusSum) div 100'i64
   let den = dx * dx + dy * dy
   if den == 0:
     return r0x * r0x + r0y * r0y <= rMm * rMm
@@ -198,8 +209,8 @@ proc drawPerm*(sim: var SimServer) =
 # ---------------------------------------------------------------------------
 #  Integer ray casts (the presentation half of the sensor frame)
 # ---------------------------------------------------------------------------
-# Both casts run in MILLIMETRES for the same overflow reason as the sweep, and
-# tests/test_tank.nim pins them against a float reference to within 2 mm.
+# Both casts run in DECIMILLIMETRES for the same overflow reason as the sweep,
+# and tests/test_tank.nim pins them against a float reference to within 2 mm.
 
 proc rayWallDistanceUm*(x, y: int32, dir: int): int32 =
   ## Distance from a point to the tank wall along DirQ12[dir], capped at
@@ -207,20 +218,24 @@ proc rayWallDistanceUm*(x, y: int32, dir: int): int32 =
   let
     ux = int64(DirQ12[dir].x)
     uy = int64(DirQ12[dir].y)
-    px = int64(x) div 1000'i64
-    py = int64(y) div 1000'i64
-    wMm = int64(ArenaW) div 1000'i64
-    hMm = int64(ArenaH) div 1000'i64
-  var best = int64(SensorRange) div 1000'i64
+    # The table entries are ROUNDED, so |u| is within a unit of Q12 but not
+    # exactly Q12: scaling by the true length rather than by Q12 is what keeps
+    # the cast inside a fraction of a millimetre of a float ray-cast.
+    uLen = isqrt(ux * ux + uy * uy)
+    px = int64(x) div 100'i64
+    py = int64(y) div 100'i64
+    wMm = int64(ArenaW) div 100'i64
+    hMm = int64(ArenaH) div 100'i64
+  var best = int64(SensorRange) div 100'i64
   if ux > 0:
-    best = min(best, ((wMm - px) * int64(Q12)) div ux)
+    best = min(best, ((wMm - px) * uLen) div ux)
   elif ux < 0:
-    best = min(best, (px * int64(Q12)) div (-ux))
+    best = min(best, (px * uLen) div (-ux))
   if uy > 0:
-    best = min(best, ((hMm - py) * int64(Q12)) div uy)
+    best = min(best, ((hMm - py) * uLen) div uy)
   elif uy < 0:
-    best = min(best, (py * int64(Q12)) div (-uy))
-  int32(max(0'i64, best) * 1000'i64)
+    best = min(best, (py * uLen) div (-uy))
+  int32(max(0'i64, best) * 100'i64)
 
 proc rayRockDistanceUm*(x, y: int32, dir: int): int32 =
   ## Distance from a point to the rock along DirQ12[dir], or SensorRange when
@@ -228,10 +243,10 @@ proc rayRockDistanceUm*(x, y: int32, dir: int): int32 =
   let
     ux = int64(DirQ12[dir].x)
     uy = int64(DirQ12[dir].y)
-    fx = (int64(x) - int64(RockCentreX)) div 1000'i64
-    fy = (int64(y) - int64(RockCentreY)) div 1000'i64
-    rMm = int64(RockRadius) div 1000'i64
-    capMm = int64(SensorRange) div 1000'i64
+    fx = (int64(x) - int64(RockCentreX)) div 100'i64
+    fy = (int64(y) - int64(RockCentreY)) div 100'i64
+    rMm = int64(RockRadius) div 100'i64
+    capMm = int64(SensorRange) div 100'i64
     a = ux * ux + uy * uy
     b = fx * ux + fy * uy
     c = fx * fx + fy * fy - rMm * rMm
@@ -242,8 +257,9 @@ proc rayRockDistanceUm*(x, y: int32, dir: int): int32 =
   let disc = b * b - a * c
   if disc < 0:
     return SensorRange
-  # The ray is p + s*u/Q12 with s in mm, so s = Q12*(-b - sqrt(b^2 - a*c)) / a.
-  let tMm = (int64(Q12) * (-b - isqrt(disc))) div a
+  # The ray is p + s*u/|u| with s in 0.1 mm units, so
+  # s = (-b - sqrt(b^2 - a*c)) / |u|.
+  let tMm = (-b - isqrt(disc)) div isqrt(a)
   if tMm < 0 or tMm > capMm:
     return SensorRange
-  int32(tMm * 1000'i64)
+  int32(tMm * 100'i64)

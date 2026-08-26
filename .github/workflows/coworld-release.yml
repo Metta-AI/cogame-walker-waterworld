@@ -170,8 +170,14 @@ jobs:
           set -euo pipefail
           echo "Certify locally" > "$RR/current_step"
           set +e
+          # The cert fixture is 720 ticks of playback plus the bounded shutdown
+          # grace, which sits close to `coworld certify`'s 60 s default. Give it
+          # room rather than shrinking the fixture: the viewer soak needs the
+          # derived smoke replay LONG (a replay shorter than the soak reads as
+          # "frozen").
           uvx --from "$COWORLD_PKG" coworld certify dist/coworld_manifest.json \
             --no-open-report \
+            --timeout-seconds 300 \
             2>&1 | tee "$RR/certify.log"
           rc="${PIPESTATUS[0]}"
           set -e

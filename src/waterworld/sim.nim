@@ -334,6 +334,8 @@ proc step*(sim: var SimServer, cmds: openArray[uint8]) =
     poisonStartX: array[PoisonCount, int32]
     poisonStartY: array[PoisonCount, int32]
     appliedLevel: array[SkimmerCount, int32]
+    foodWasLive: array[FoodCount, bool]
+    poisonWasLive: array[PoisonCount, bool]
 
   for i in 0 ..< SkimmerCount:
     skimmerStartX[i] = sim.skimmers[i].x
@@ -341,9 +343,11 @@ proc step*(sim: var SimServer, cmds: openArray[uint8]) =
   for f in 0 ..< FoodCount:
     foodStartX[f] = sim.food[f].x
     foodStartY[f] = sim.food[f].y
+    foodWasLive[f] = sim.food[f].state == psLive
   for q in 0 ..< PoisonCount:
     poisonStartX[q] = sim.poison[q].x
     poisonStartY[q] = sim.poison[q].y
+    poisonWasLive[q] = sim.poison[q].state == psLive
 
   # --- 3. skimmer dynamics, skimmer index order ---------------------------
   for i in 0 ..< SkimmerCount:
@@ -377,7 +381,11 @@ proc step*(sim: var SimServer, cmds: openArray[uint8]) =
   # --- 6a. poison contacts, skimmer index order then poison id order -------
   for i in 0 ..< SkimmerCount:
     for q in 0 ..< sim.config.poisonCount:
-      if sim.poison[q].state != psLive:
+      # A particle that RESPAWNED this tick has no swept path: it appeared at a
+      # fresh seeded point at least 1.50 m from every live skimmer, so it cannot
+      # be touched on the tick it arrives, and sweeping the teleport line would
+      # invent contacts along it.
+      if sim.poison[q].state != psLive or not poisonWasLive[q]:
         continue
       if not sweptContact(
           skimmerStartX[i], skimmerStartY[i], sim.skimmers[i].x, sim.skimmers[i].y,
@@ -404,7 +412,7 @@ proc step*(sim: var SimServer, cmds: openArray[uint8]) =
 
   # --- 6b. capture / nibble, plankton id order -----------------------------
   for f in 0 ..< sim.config.foodCount:
-    if sim.food[f].state != psLive:
+    if sim.food[f].state != psLive or not foodWasLive[f]:
       continue
     var holders: seq[int]
     for i in 0 ..< SkimmerCount:

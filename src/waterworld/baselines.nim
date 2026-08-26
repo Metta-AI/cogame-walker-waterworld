@@ -38,25 +38,41 @@ type
     leadTicks*: int32          ## how far ahead a hunt aims
 
 const DefaultBaselineParams* = BaselineParams(
-  pairJoinRadiusUm: 3_200_000,
-  standoffMilli: 1_200,
-  leadTicks: 8
+  ## THE GRID HARNESS'S PICK, not a guess. `tools/tune_baselines.nim` plays four
+  ## `shoal`s over a 4x4x4 matrix of these across a twelve-seed panel; this cell
+  ## wins with a mean score of 180.9 where the design note's first guess
+  ## (3.20 m join, 1.20 m standoff, 8-tick lead) scores 154.6. The whole grid and
+  ## the winning panel are recorded in `tools/ci/baseline_tuning.json` and
+  ## `tests/test_tuning.nim` re-asserts the pair.
+  ##
+  ## Read it as behaviour: a TIGHTER join radius (2.40 m, not 3.20 m) stops a
+  ## shoal committing to plankton its mate cannot actually reach in three
+  ## seconds, a WIDER standoff (1.80 m) keeps the pair off the blooms that were
+  ## costing it -2 a time, and a LONGER lead (12 ticks, half a second) aims at
+  ## where a 0.9 m/s particle will be rather than where it is.
+  pairJoinRadiusUm: 2_400_000,
+  standoffMilli: 1_800,
+  leadTicks: 12
 )
 
 const
+  # The fixed circuit, in SIM coordinates. In view metres, in order:
+  # (3, 2), (9, 2), (9, 6), (3, 6) — the four corners of the search box.
   ShoalPatrol: array[4, tuple[x, y: int32]] = [
-    (3_000_000'i32, 6_000_000'i32),   ## view (3, 2)
-    (9_000_000'i32, 6_000_000'i32),   ## view (9, 2)
-    (9_000_000'i32, 2_000_000'i32),   ## view (9, 6)
-    (3_000_000'i32, 2_000_000'i32)    ## view (3, 6)
+    (3_000_000'i32, 6_000_000'i32),
+    (9_000_000'i32, 6_000_000'i32),
+    (9_000_000'i32, 2_000_000'i32),
+    (3_000_000'i32, 2_000_000'i32)
   ]
+  # The fixed six-point serpentine, in SIM coordinates. In view metres:
+  # (1.5, 1.5), (10.5, 1.5), (1.5, 4.0), (10.5, 4.0), (1.5, 6.5), (10.5, 6.5).
   DrifterSerpentine: array[6, tuple[x, y: int32]] = [
-    (1_500_000'i32, 6_500_000'i32),   ## view (1.5, 1.5)
-    (10_500_000'i32, 6_500_000'i32),  ## view (10.5, 1.5)
-    (1_500_000'i32, 4_000_000'i32),   ## view (1.5, 4.0)
-    (10_500_000'i32, 4_000_000'i32),  ## view (10.5, 4.0)
-    (1_500_000'i32, 1_500_000'i32),   ## view (1.5, 6.5)
-    (10_500_000'i32, 1_500_000'i32)   ## view (10.5, 6.5)
+    (1_500_000'i32, 6_500_000'i32),
+    (10_500_000'i32, 6_500_000'i32),
+    (1_500_000'i32, 4_000_000'i32),
+    (10_500_000'i32, 4_000_000'i32),
+    (1_500_000'i32, 1_500_000'i32),
+    (10_500_000'i32, 1_500_000'i32)
   ]
   ShoalPoisonPanicUm = 900_000'i32
   ShoalSitOnItUm = 1_000_000'i32

@@ -2,7 +2,7 @@
 ## sensor frame, intent, controller, command byte, step — so a test can never
 ## pass against a code path production does not take.
 
-import std/[json, os, random]
+import std/[json, os]
 
 import waterworld/[sim, roster, sensors, intents, control, baselines]
 
@@ -71,11 +71,10 @@ proc runScripted*(
 
 proc replaySteps*(config: GameConfig, log: seq[array[SkimmerCount, uint8]]): seq[uint64] =
   ## Re-simulates a recorded byte log from a FRESH sim — the browser's job, in
-  ## the same process.
-  var sim = initSimServer(config)
-  sim.gameEventLoggingEnabled = false
-  for seat in 0 ..< SkimmerCount:
-    discard sim.addPlayer("policy-" & $seat, seat, "t" & $seat, trusted = true)
+  ## the same process. The lobby walk is replayed first, exactly as `seatedSim`
+  ## did before recording, because the log starts at the first PLAYING tick and
+  ## the hash mixes the tick number.
+  var sim = seatedSim(config.seed, config.maxTicks)
   for cmds in log:
     sim.step(cmds)
     result.add(sim.gameHash())

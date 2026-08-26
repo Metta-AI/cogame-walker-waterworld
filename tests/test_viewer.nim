@@ -106,7 +106,11 @@ block noAliasCollision:
   ## markers that never seek. Assert no game-block TOP-LEVEL name collides.
   let banner = page.find("WALKER-WATERWORLD additions to the inherited")
   check("the game block banner is present", banner > 0)
-  let block2 = page[banner .. ^1]
+  # From the block's own <script>, not its banner: the banner NAMES the alias it
+  # must not shadow, in prose.
+  let scriptAt = page.find("<script>", banner)
+  check("the game block carries a script", scriptAt > banner)
+  let block2 = page[scriptAt .. ^1]
   const aliases = ["RED", "BLUE", "AMBER", "PAPER", "GREEN", "YELLOW",
     "TEAM_ORDER", "TEAM_COLOR", "teamCol", "activeTeams", "teamOf", "otherTeam",
     "stripSeatSuffix", "teamPolicies", "teamName", "teamHeadline", "rosterName",

@@ -248,9 +248,13 @@ proc parseIntent*(
     inc usable
 
   if payload.hasKey("target"):
+    # The <= 4-rune cap is on what is RECORDED, and the recorded value is
+    # canonical (`F1`..`F5` or `none`) by construction — so the reply's own
+    # spelling is parsed in full. Capping first would turn "plankton F2" into
+    # "plan" and lose a target the model really named.
     let node = payload{"target"}
     let text =
-      if node.kind == JString: node.getStr().truncateRunes(4)
+      if node.kind == JString: node.getStr()
       elif node.kind == JInt: $node.getBiggestInt()
       else: "none"
     result.target = parseTargetId(text)
@@ -259,7 +263,7 @@ proc parseIntent*(
   if payload.hasKey("partner"):
     let node = payload{"partner"}
     let text =
-      if node.kind == JString: node.getStr().truncateRunes(8)
+      if node.kind == JString: node.getStr()
       elif node.kind == JInt: $node.getBiggestInt()
       else: "none"
     result.partner = parsePartnerAlias(text, ownSkimmer)
@@ -367,9 +371,10 @@ proc boundedIntentRecord*(
   var guard = 0
   while result.runeLen > MaxIntentRecordRunes and guard < 12:
     inc guard
-    let keep = max(0, trimmed.note.runeLen - max(8, trimmed.note.runeLen div 2))
-    trimmed.note = trimmed.note.truncateRunes(keep)
-    trimmed.say = trimmed.say.truncateRunes(max(0, trimmed.say.runeLen - 2))
+    trimmed.note = trimmed.note.truncateRunes(
+      max(0, trimmed.note.runeLen - max(8, trimmed.note.runeLen div 2)))
+    trimmed.say = trimmed.say.truncateRunes(
+      max(0, trimmed.say.runeLen - max(4, trimmed.say.runeLen div 2)))
     result = $trimmed.intentRecord(turn, seat, skimmer)
 
 proc registerRecord*(

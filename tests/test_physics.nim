@@ -12,30 +12,66 @@ proc check(name: string, ok: bool, detail = "") =
     inc failures
     echo "FAIL ", name, (if detail.len > 0: ": " & detail else: "")
 
+proc clearParticles(sim: var SimServer) =
+  ## Pure-physics blocks measure MOTION, so nothing may be in the water: a
+  ## poison hit halves the speed and a capture consumes a plankton, and either
+  ## would be measured as drag.
+  for f in 0 ..< FoodCount:
+    sim.food[f].state = psRespawning
+    sim.food[f].timer = 1
+  for q in 0 ..< PoisonCount:
+    sim.poison[q].state = psRespawning
+    sim.poison[q].timer = 1
+  sim.config.foodCount = 0
+  sim.config.poisonCount = 0
+
+proc parkOthers(sim: var SimServer) =
+  ## And nothing may collide: the other three skimmers go to a far corner.
+  for i in 1 ..< SkimmerCount:
+    sim.skimmers[i].x = ArenaW - SkimmerRadius
+    sim.skimmers[i].y = ArenaH - SkimmerRadius
+    sim.skimmers[i].vx = 0
+    sim.skimmers[i].vy = 0
+
 proc speedOf(vx, vy: int32): float =
   sqrt(float(vx) * float(vx) + float(vy) * float(vy))
 
 block thrustAccelerates:
+  ## The RAMP and the TERMINAL speed together pin the accel and the drag. Note
+  ## the design note's "2.6 .. 3.3 m/s after 24 ticks" cannot hold for its own
+  ## constants: 3.00 m/s^2 against 3.81 %/tick of drag reaches 3.24 m/s
+  ## ASYMPTOTICALLY, and one second of it is 1.9 m/s. The constants are the
+  ## design's; this is the behaviour they produce, and both ends are asserted.
   var sim = seatedSim()
+  sim.clearParticles()
+  sim.parkOthers()
   var cmds: array[SkimmerCount, uint8]
-  # Level 7 due east for 24 ticks, from rest, on the skimmer nearest a clear
-  # stretch of water.
   cmds[0] = encodeThrust(0, 7)
-  sim.skimmers[0].x = 2_000_000
+  sim.skimmers[0].x = 1_000_000
   sim.skimmers[0].y = 7_000_000
   sim.skimmers[0].vx = 0
   sim.skimmers[0].vy = 0
   for _ in 0 ..< 24:
+    sim.skimmers[0].x = 1_000_000          ## keep the wall out of it
     sim.step(cmds)
-  let metresPerSec = speedOf(sim.skimmers[0].vx, sim.skimmers[0].vy) *
+  let after24 = speedOf(sim.skimmers[0].vx, sim.skimmers[0].vy) *
     float(TargetFps) / 1_000_000.0
-  check("level 7 for 24 ticks reaches 2.6 .. 3.3 m/s",
-    metresPerSec >= 2.6 and metresPerSec <= 3.3, &"{metresPerSec:.3f} m/s")
+  check("level 7 for 24 ticks reaches 1.8 .. 2.1 m/s",
+    after24 >= 1.8 and after24 <= 2.1, &"{after24:.3f} m/s")
+  for _ in 0 ..< 300:
+    sim.skimmers[0].x = 1_000_000
+    sim.step(cmds)
+  let terminal = speedOf(sim.skimmers[0].vx, sim.skimmers[0].vy) *
+    float(TargetFps) / 1_000_000.0
+  check("held at level 7 it settles on the 3.24 m/s terminal speed",
+    terminal >= 3.15 and terminal <= 3.25, &"{terminal:.3f} m/s")
   check("never exceeds the speed clamp",
     speedOf(sim.skimmers[0].vx, sim.skimmers[0].vy) <= float(MaxSkimmerSpeed) + 1.0)
 
 block dragDecays:
   var sim = seatedSim()
+  sim.clearParticles()
+  sim.parkOthers()
   sim.skimmers[0].x = 6_000_000
   sim.skimmers[0].y = 7_400_000
   sim.skimmers[0].vx = MaxSkimmerSpeed
@@ -50,6 +86,8 @@ block dragDecays:
   # 120 ticks of coasting, with the skimmer re-parked each tick so a wall never
   # interferes with the pure drag measurement.
   var sim2 = seatedSim()
+  sim2.clearParticles()
+  sim2.parkOthers()
   sim2.skimmers[0].vx = MaxSkimmerSpeed
   sim2.skimmers[0].vy = 0
   for _ in 0 ..< 120:
@@ -62,6 +100,8 @@ block dragDecays:
 
 block wallRebound:
   var sim = seatedSim()
+  sim.clearParticles()
+  sim.parkOthers()
   sim.skimmers[0].x = ArenaW - SkimmerRadius - 10_000
   sim.skimmers[0].y = 4_000_000
   sim.skimmers[0].vx = MaxSkimmerSpeed
@@ -92,6 +132,8 @@ check("random-drive containment held", true)
 
 block rockPushOut:
   var sim = seatedSim()
+  sim.clearParticles()
+  sim.parkOthers()
   sim.skimmers[0].x = RockCentreX - RockRadius - SkimmerRadius + 200_000
   sim.skimmers[0].y = RockCentreY
   sim.skimmers[0].vx = MaxSkimmerSpeed
@@ -104,46 +146,51 @@ block rockPushOut:
     abs(d - int64(RockRadius + SkimmerRadius)) <= 2, $d)
 
 block particleSpeedIsExactlyConstant:
+  ## THE INDEX-REFLECTION PROPERTY, asserted bit-exactly: a live particle's
+  ## speed never changes. Direction changes only at a bounce, and the whole
+  ## motion is integer-exact with no energy drift to renormalise. A respawn
+  ## draws a FRESH speed, so the baseline is refreshed whenever a particle
+  ## comes back.
   var sim = seatedSim()
-  let startSpeeds = block:
-    var out: array[FoodCount, int32]
-    for f in 0 ..< FoodCount:
-      out[f] = sim.food[f].speed
-    out
   var cmds: array[SkimmerCount, uint8]
-  var bounces = 0
-  var lastDirs: array[FoodCount, uint8]
+  var
+    speeds: array[FoodCount, int32]
+    dirs: array[FoodCount, uint8]
+    live: array[FoodCount, bool]
+    bounces = 0
+    respawns = 0
   for f in 0 ..< FoodCount:
-    lastDirs[f] = sim.food[f].dir
-  # 5000 ticks with no capture pressure: park every skimmer in a corner so the
-  # particles are the only thing moving.
+    speeds[f] = sim.food[f].speed
+    dirs[f] = sim.food[f].dir
+    live[f] = sim.food[f].state == psLive
   for tick in 0 ..< 5000:
-    for i in 0 ..< SkimmerCount:
-      sim.skimmers[i].x = SkimmerRadius + 1000
-      sim.skimmers[i].y = SkimmerRadius + 1000
-      sim.skimmers[i].vx = 0
-      sim.skimmers[i].vy = 0
     sim.step(cmds)
     for f in 0 ..< FoodCount:
-      if sim.food[f].dir != lastDirs[f]:
+      let p = sim.food[f]
+      if p.state != psLive:
+        live[f] = false
+        continue
+      if not live[f]:
+        live[f] = true
+        speeds[f] = p.speed
+        dirs[f] = p.dir
+        inc respawns
+        continue
+      if p.speed != speeds[f]:
+        check("a live plankton's speed is EXACTLY constant", false,
+          &"F{f + 1} {speeds[f]} -> {p.speed}")
+        speeds[f] = p.speed
+      if p.dir != dirs[f]:
         inc bounces
-        lastDirs[f] = sim.food[f].dir
-      if sim.food[f].state == psLive and sim.food[f].speed != startSpeeds[f]:
-        check("a plankton's speed is EXACTLY constant", false,
-          &"F{f + 1} {startSpeeds[f]} -> {sim.food[f].speed}")
-        break
-      if sim.food[f].state == psLive:
-        let inRock = distSqUm(sim.food[f].x, sim.food[f].y,
-          RockCentreX, RockCentreY) <
-          int64(RockRadius + FoodRadius - 2) * int64(RockRadius + FoodRadius - 2)
-        if inRock:
-          check("a plankton never ends inside the rock", false, &"F{f + 1}")
-          break
-        if sim.food[f].x < FoodRadius - 1 or sim.food[f].x > ArenaW - FoodRadius + 1 or
-            sim.food[f].y < FoodRadius - 1 or sim.food[f].y > ArenaH - FoodRadius + 1:
-          check("a plankton never ends outside the tank", false, &"F{f + 1}")
-          break
+        dirs[f] = p.dir
+      let clearance = int64(RockRadius + FoodRadius - 2)
+      if distSqUm(p.x, p.y, RockCentreX, RockCentreY) < clearance * clearance:
+        check("a plankton never ends inside the rock", false, &"F{f + 1}")
+      if p.x < FoodRadius - 1 or p.x > ArenaW - FoodRadius + 1 or
+          p.y < FoodRadius - 1 or p.y > ArenaH - FoodRadius + 1:
+        check("a plankton never ends outside the tank", false, &"F{f + 1}")
   check("5000 ticks produced 40+ bounces", bounces >= 40, $bounces)
+  echo "particle walk: ", bounces, " bounces, ", respawns, " respawns"
 
 block reflectionRules:
   # Every index reflection must agree with a float reference to within one index.

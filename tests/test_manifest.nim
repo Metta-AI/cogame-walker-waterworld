@@ -166,7 +166,7 @@ block protocols:
     check("protocols." & which & " is non-empty text",
       node{"value"}.getStr().len > 400, $node{"value"}.getStr().len)
 
-block docs:
+block gameDocs:
   let docs = game{"docs"}
   check("docs.readme is a {type,value} object",
     docs{"readme"}{"type"}.getStr() == "text")

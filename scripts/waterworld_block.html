@@ -150,11 +150,11 @@
 (function () {
   'use strict';
   // Every name here carries a ww- prefix ON PURPOSE. The page's chrome alias
-  // block declares the shared beat builder with a hoisted `var markBeat =
-  // C.markBeat`, so a game-block function of that same name is silently
-  // swallowed by it and the scrubber ends up with unlabelled div markers that
-  // never seek. tests/test_viewer.nim asserts the whole alias list is untouched
-  // below this banner.
+  // block declares the shared beat builder with a hoisted alias of the same
+  // name, so a game-block function of that name is silently swallowed by it and
+  // the scrubber ends up with unlabelled div markers that never seek.
+  // tests/test_viewer.nim asserts the whole alias list is untouched below this
+  // banner, and it looks for DECLARATIONS, so this note must not spell one.
   var CTX = null;
   var placed = {};            // "tick|kind" -> true (dedup)
   var legendUntil = -1;

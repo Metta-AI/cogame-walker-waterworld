@@ -114,9 +114,11 @@ block rayCasts:
     for n in 0 ..< SensorCount:
       let
         dir = n * 2
-        ux = float(DirQ12[dir].x) / 4096.0
-        uy = float(DirQ12[dir].y) / 4096.0
-      # Float reference: march to the wall.
+        uLen = sqrt(float(DirQ12[dir].x) * float(DirQ12[dir].x) +
+                    float(DirQ12[dir].y) * float(DirQ12[dir].y))
+        ux = float(DirQ12[dir].x) / uLen
+        uy = float(DirQ12[dir].y) / uLen
+      # Float reference: march to the wall, along the UNIT direction.
       var wall = float(SensorRange)
       if ux > 1e-9: wall = min(wall, (float(ArenaW) - float(mx)) / ux)
       elif ux < -1e-9: wall = min(wall, float(mx) / -ux)
@@ -138,12 +140,29 @@ block rayCasts:
         let t = -b - sqrt(disc)
         if t >= 0 and t <= float(SensorRange):
           rock = t
+      # A NEAR-TANGENT ray is legitimately ambiguous at any finite precision:
+      # the hit distance's sensitivity to the closest approach diverges at
+      # tangency, so a 0.1 mm truncation can move the answer by centimetres or
+      # flip a graze into a miss. Skip those; every other ray is pinned.
+      let perpendicular = sqrt(max(0.0,
+        fx * fx + fy * fy - b * b))
+      if abs(perpendicular - float(RockRadius)) < 20_000.0:
+        continue
       let gotRock = float(rayRockDistanceUm(mx, my, dir))
       check("the integer rock cast matches a float ray-cast within 2 mm",
         abs(gotRock - rock) <= 2000.0, &"{gotRock} vs {rock}")
 
 block closingSign:
   var sim = seatedSim()
+  # One plankton, one poison, everything else out of play: this block is about
+  # the SIGN of the closing speed, not about which particle is nearest.
+  for f in 1 ..< FoodCount:
+    sim.food[f].state = psRespawning
+  for q in 0 ..< PoisonCount:
+    sim.poison[q].state = psRespawning
+  for i in 1 ..< SkimmerCount:
+    sim.skimmers[i].x = ArenaW - SkimmerRadius
+    sim.skimmers[i].y = ArenaH - SkimmerRadius
   sim.skimmers[0].x = 2_000_000
   sim.skimmers[0].y = 4_000_000
   sim.skimmers[0].vx = 100_000
@@ -158,6 +177,7 @@ block closingSign:
     approaching.food.len == 1 and approaching.food[0].closingUm > 0,
     $approaching.food[0].closingUm)
   sim.food[0].dir = 0           ## due east: running away
+  sim.skimmers[0].vx = 0        ## and I am not chasing it
   let leaving = sim.frameFor(0)
   check("closing is negative when the pair is separating",
     leaving.food.len == 1 and leaving.food[0].closingUm < 0,

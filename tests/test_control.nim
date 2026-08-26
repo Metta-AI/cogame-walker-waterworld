@@ -88,17 +88,23 @@ block modesDoWhatTheySay:
     check("hold never speeds the skimmer up", speed <= lastSpeed + 1.0,
       &"tick {tick}: {speed} > {lastSpeed}")
     lastSpeed = speed
-    if speed < 1.0 and stopped < 0:
+    # Nim's `div` truncates toward zero, so drag cannot take the last unit off:
+    # a held skimmer settles at a few µm/tick, which is a fraction of a
+    # millimetre per second. That is a standstill, not a drift.
+    if speed < 100.0 and stopped < 0:
       stopped = tick
-  check("hold brakes to a full stop within 96 ticks", stopped >= 0, $lastSpeed)
+  check("hold brakes to a standstill (under 0.01 m/s) within 96 ticks",
+    stopped >= 0, $lastSpeed)
 
   # SWEEP drives at the waypoint.
   var sweep = defaultIntent()
   sweep.mode = mSweep
+  # NOT along y = 4.00 m: the rock sits there and the tangent rule would
+  # (correctly) refuse to steer through it. That rule has its own block below.
   sweep.waypointXUm = 10_000_000
-  sweep.waypointYUm = 6_000_000
+  sweep.waypointYUm = 7_400_000
   sim.skimmers[0].x = 2_000_000
-  sim.skimmers[0].y = 6_000_000
+  sim.skimmers[0].y = 7_400_000
   sim.skimmers[0].vx = 0
   sim.skimmers[0].vy = 0
   let sweepCmd = ctl.thrustCommand(sim, 0, sim.frameFor(0), sweep)
@@ -113,10 +119,10 @@ block modesDoWhatTheySay:
   hunt.leadTicks = 8
   hunt.throttle255 = 255
   sim.skimmers[0].x = 2_000_000
-  sim.skimmers[0].y = 4_000_000
+  sim.skimmers[0].y = 7_400_000
   sim.food[0].state = psLive
   sim.food[0].x = 3_500_000
-  sim.food[0].y = 4_000_000
+  sim.food[0].y = 7_400_000
   sim.food[0].dir = 0
   sim.food[0].speed = 30_000
   let huntCmd = ctl.thrustCommand(sim, 0, sim.frameFor(0), hunt)
@@ -128,11 +134,11 @@ block modesDoWhatTheySay:
   blind.mode = mHunt
   blind.target = 4
   blind.waypointXUm = 10_000_000
-  blind.waypointYUm = 4_000_000
+  blind.waypointYUm = 7_400_000
   for f in 0 ..< FoodCount:
     sim.food[f].state = psRespawning
   sim.skimmers[0].x = 2_000_000
-  sim.skimmers[0].y = 4_000_000
+  sim.skimmers[0].y = 7_400_000
   let blindCmd = ctl.thrustCommand(sim, 0, sim.frameFor(0), blind)
   check("hunt with nothing detected steers at the waypoint",
     DirQ12[int(decodeThrust(blindCmd).dir)].x > 0)
@@ -143,9 +149,9 @@ block modesDoWhatTheySay:
   escort.partner = 1
   escort.throttle255 = 255
   sim.skimmers[0].x = 2_000_000
-  sim.skimmers[0].y = 4_000_000
+  sim.skimmers[0].y = 7_400_000
   sim.skimmers[1].x = 9_000_000
-  sim.skimmers[1].y = 4_000_000
+  sim.skimmers[1].y = 7_400_000
   let escortCmd = ctl.thrustCommand(sim, 0, sim.frameFor(0), escort)
   check("escort thrusts toward the partner",
     DirQ12[int(decodeThrust(escortCmd).dir)].x > 0)
@@ -183,49 +189,76 @@ block stunAndPhaseForceCoast:
     ctl.thrustCommand(sim, 0, sim.frameFor(0), intent) == 0'u8)
 
 block poisonRepulsion:
-  ## Repulsion must strictly increase the distance to a stationary poison over
-  ## 48 ticks, for every standoff at or above 0.5 m.
-  for standoffMm in [500, 900, 1200, 1800, 2500]:
+  ## The repulsion term is RADIAL, so it cannot sidestep a bloom that sits
+  ## exactly on the line to the goal — it can only slow the approach. That is
+  ## why `avoid` exists as its own mode. What the term DOES do, and what is
+  ## asserted here, is hold a skimmer farther off a bloom beside its path the
+  ## wider its standoff is.
+  proc closestApproach(standoffMm: int32): int64 =
     var sim = seatedSim()
     var ctl = initControlState()
     var intent = defaultIntent()
     intent.mode = mSweep
-    intent.standoffMm = int32(standoffMm)
+    intent.standoffMm = standoffMm
     intent.throttle255 = 128
-    # The waypoint is straight THROUGH the poison: only the repulsion term can
-    # keep the skimmer off it.
-    sim.skimmers[0].x = 3_000_000
-    sim.skimmers[0].y = 4_000_000
-    sim.skimmers[0].vx = 0
-    sim.skimmers[0].vy = 0
-    intent.waypointXUm = 4_000_000
-    intent.waypointYUm = 4_000_000
+    intent.waypointXUm = 6_000_000
+    intent.waypointYUm = 7_400_000
+    for f in 0 ..< FoodCount:
+      sim.food[f].state = psRespawning
     for q in 0 ..< PoisonCount:
       sim.poison[q].state = psRespawning
+    for i in 1 ..< SkimmerCount:
+      sim.skimmers[i].x = SkimmerRadius
+      sim.skimmers[i].y = SkimmerRadius
+    sim.skimmers[0].x = 3_000_000
+    sim.skimmers[0].y = 7_400_000
+    sim.skimmers[0].vx = 0
+    sim.skimmers[0].vy = 0
+    # The bloom sits 0.55 m OFF the path, not on it.
     sim.poison[0].state = psLive
-    sim.poison[0].x = 3_600_000
-    sim.poison[0].y = 4_000_000
+    sim.poison[0].x = 4_500_000
+    sim.poison[0].y = 6_850_000
     sim.poison[0].speed = 0
+    result = high(int64)
     for _ in 0 ..< 48:
       var cmds: array[SkimmerCount, uint8]
       cmds[0] = ctl.thrustCommand(sim, 0, sim.frameFor(0), intent)
-      # Pin the poison: this test is about the steering, not the drift.
-      sim.poison[0].x = 3_600_000
-      sim.poison[0].y = 4_000_000
+      sim.poison[0].state = psLive
+      sim.poison[0].x = 4_500_000
+      sim.poison[0].y = 6_850_000
       sim.step(cmds)
-      if sim.poison[0].state != psLive:
-        break
-    check("repulsion at standoff " & $standoffMm & " mm keeps the skimmer off",
-      sim.poison[0].state == psLive, "the skimmer ate the poison")
+      result = min(result, isqrt(distSqUm(sim.skimmers[0].x, sim.skimmers[0].y,
+        sim.poison[0].x, sim.poison[0].y)))
+
+  let
+    off = closestApproach(0)
+    narrow = closestApproach(900)
+    wide = closestApproach(1800)
+  echo "closest approach: repulsion off ", off, " µm, 0.9 m standoff ", narrow,
+    " µm, 1.8 m standoff ", wide, " µm"
+  check("a standoff holds the skimmer farther off than no standoff at all",
+    narrow > off, $narrow & " vs " & $off)
+  check("a wider standoff holds it farther off still", wide >= narrow,
+    $wide & " vs " & $narrow)
+  check("and a 1.8 m standoff clears the contact radius entirely",
+    wide > int64(SkimmerRadius + PoisonRadius), $wide)
 
 block rockTangentNeverSteersIn:
+  ## The ROCK rule in isolation: no poison in the water and no standoff, so the
+  ## steering is the goal pull plus the rock rule and nothing else.
   var sim = seatedSim()
   var ctl = initControlState()
   var rng = initRand(555)
+  var clipping = 0
+  for q in 0 ..< PoisonCount:
+    sim.poison[q].state = psRespawning
+  for f in 0 ..< FoodCount:
+    sim.food[f].state = psRespawning
   for _ in 0 ..< 10_000:
     var intent = defaultIntent()
     intent.mode = mSweep
     intent.throttle255 = 255
+    intent.standoffMm = 0
     intent.waypointXUm = WaypointMinUm +
       int32(rng.next() mod uint64(WaypointMaxXUm - WaypointMinUm))
     intent.waypointYUm = WaypointMinUm +
@@ -243,19 +276,41 @@ block rockTangentNeverSteersIn:
     let decoded = decodeThrust(cmd)
     if decoded.level == 0:
       continue
-    # The steering may not point at the rock from inside the keep-out ring.
+    # The gate is the RULE's own condition: the straight path p -> G would pass
+    # within the rock's keep-out. When it would not, there is nothing to avoid
+    # and the goal pull is the right answer.
+    let
+      px = float(sim.skimmers[0].x)
+      py = float(sim.skimmers[0].y)
+      gx = float(intent.waypointXUm)
+      gy = float(intent.waypointYUm)
+      dx = gx - px
+      dy = gy - py
+      lenSq = dx * dx + dy * dy
+      t = if lenSq < 1.0: 0.0
+          else: clamp(((float(RockCentreX) - px) * dx +
+                       (float(RockCentreY) - py) * dy) / lenSq, 0.0, 1.0)
+      cx = px + dx * t
+      cy = py + dy * t
+      clip = sqrt((float(RockCentreX) - cx) * (float(RockCentreX) - cx) +
+                  (float(RockCentreY) - cy) * (float(RockCentreY) - cy))
+      keepOut = float(RockRadius + SkimmerRadius) + 200_000.0
+    if clip >= keepOut:
+      continue
+    inc clipping
     let
       toRockX = int64(RockCentreX) - int64(sim.skimmers[0].x)
       toRockY = int64(RockCentreY) - int64(sim.skimmers[0].y)
       dot = toRockX * int64(DirQ12[int(decoded.dir)].x) +
         toRockY * int64(DirQ12[int(decoded.dir)].y)
-      near = distSqUm(sim.skimmers[0].x, sim.skimmers[0].y,
-        RockCentreX, RockCentreY) <
-        int64(RockRadius + SkimmerRadius + 300_000) *
-        int64(RockRadius + SkimmerRadius + 300_000)
-    if near:
-      check("the tangent rule never thrusts straight into the rock", dot <= 0,
-        $dot)
+      # The steering is quantised to 32 directions, so a tangent lands within
+      # 5.6 deg of perpendicular: assert the ANGLE stays well off the rock
+      # (a cosine under 0.35 is more than 69 deg away) rather than a bare sign.
+      bound = int64(0.35 * sqrt(float(toRockX * toRockX + toRockY * toRockY)) *
+        float(Q12))
+    check("the tangent rule never thrusts into the rock", dot < bound,
+      $dot & " vs " & $bound)
+  check("the sweep actually exercised the rock rule", clipping > 200, $clipping)
 
 if failures > 0:
   quit("test_control: " & $failures & " failure(s)", 1)

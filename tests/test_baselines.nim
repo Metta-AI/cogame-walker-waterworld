@@ -5,7 +5,7 @@
 ##
 ## Release-only (NIM_TESTS_RELEASE_ONLY): it plays whole episodes.
 
-import std/[json, math, os, random, strformat, strutils]
+import std/[json, math, random, strutils]
 
 import helpers
 import waterworld/[sim, roster, sensors, intents, control, baselines]
@@ -118,10 +118,10 @@ proc summarize(rows: seq[PanelResult], atLeast: int): tuple[
   result.mean = total / float(max(1, rows.len))
 
 let seeds = block:
-  var out: seq[int]
+  var panel: seq[int]
   for i in 0 ..< 20:
-    out.add(1000 + i * 7919)
-  out
+    panel.add(1000 + i * 7919)
+  panel
 
 let
   shoal = playPanel(blShoal, seeds)
@@ -175,7 +175,10 @@ block tuningPin:
     check("baseline_tuning.json carries the measured panel " &
       "(printed above; commit it)", false)
   else:
-    let measured = tuning["measured"]
+    let
+      measured = tuning["measured"]
+      floor = measured["designFloor"]
+    # Against the RECORDED measurement...
     check("four shoals still reach the recorded seed count at 8+ captures",
       shoalSummary.hits >= measured["shoalSeedsAt8"].getInt(),
       $shoalSummary.hits & " vs " & $measured["shoalSeedsAt8"].getInt())
@@ -185,6 +188,17 @@ block tuningPin:
     check("a 2-shoal/2-drifter mix still reaches the recorded seed count",
       mixedSummary.hits >= measured["mixedSeedsAt4"].getInt(),
       $mixedSummary.hits & " vs " & $measured["mixedSeedsAt4"].getInt())
+    # ...AND against the design note's own floor, so a slow drift that keeps
+    # re-recording itself downward still trips.
+    check("four shoals reach 8+ captures on at least 18 of 20 seeds",
+      shoalSummary.hits >= floor["shoalSeedsAt8"].getInt(),
+      $shoalSummary.hits)
+    check("with a mean score above +70",
+      shoalSummary.mean > floor["shoalMeanScore"].getFloat(),
+      $shoalSummary.mean)
+    check("and a 2-shoal/2-drifter mix reaches 4+ captures on 16 of 20",
+      mixedSummary.hits >= floor["mixedSeedsAt4"].getInt(),
+      $mixedSummary.hits)
 
 block drifterIsWeaker:
   ## `drifter` is deliberately different in SHAPE and weaker, so the ladder gets

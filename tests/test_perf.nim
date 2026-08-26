@@ -7,9 +7,9 @@ import std/[monotimes, times]
 import helpers
 import waterworld/[sim, baselines]
 
-var sim = seatedSim()
+var tank = seatedSim()
 let started = getMonoTime()
-let run = sim.runScripted(blShoal)
+let run = tank.runScripted(blShoal)
 let elapsed = (getMonoTime() - started).inMilliseconds.int
 
 echo "perf: ", run.ticks, " ticks, ", run.ticks * SkimmerCount,

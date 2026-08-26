@@ -6,10 +6,10 @@
 ## `tools/gen_wire_constants.nim` emits it for the static wasm bundle.
 ##
 ## Clients read `window.WATERWORLD_WIRE`. `client/chrome_common.js` is inherited
-## from coworld-ctf BYTE FOR BYTE and reads `window.CTF_WIRE`, so it runs on its
-## own documented fallbacks (`[1,2,3,4,8,16]`, fps 24) — `tests/test_viewer.nim`
-## pins those literals equal to `PlaybackSpeeds` and `ReplayFps`, so the fallback
-## can never drift from the engine.
+## from the starter BYTE FOR BYTE and still reads the STARTER's wire global, so
+## it runs on its own documented fallbacks (`[1,2,3,4,8,16]`, fps 24) —
+## `tests/test_viewer.nim` pins those literals equal to `PlaybackSpeeds` and
+## `ReplayFps`, so the fallback can never drift from the engine.
 
 import std/strutils
 
