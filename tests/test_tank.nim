@@ -104,6 +104,10 @@ block sectorsTile:
 
 block rayCasts:
   var rng = initRand(2718)
+  var
+    pinned = 0
+    nearTangent = 0
+    grazeFlips = 0
   for _ in 0 ..< 2000:
     let
       mx = SkimmerRadius + int32(rng.next() mod uint64(ArenaW - 2 * SkimmerRadius))
@@ -141,16 +145,42 @@ block rayCasts:
         if t >= 0 and t <= float(SensorRange):
           rock = t
       # A NEAR-TANGENT ray is legitimately ambiguous at any finite precision:
-      # the hit distance's sensitivity to the closest approach diverges at
-      # tangency, so a 0.1 mm truncation can move the answer by centimetres or
-      # flip a graze into a miss. Skip those; every other ray is pinned.
+      # `t = -b - sqrt(b*b - a*c)` has an unbounded derivative in the closest
+      # approach as the discriminant goes to zero, so the 0.1 mm truncation in
+      # `rayRockDistanceUm` can move the answer by millimetres or flip a graze
+      # into a miss. Those rays are NOT dropped: they are counted and held to a
+      # wider bound, and the two counts are asserted below so the class can
+      # never quietly swallow the sample.
       let perpendicular = sqrt(max(0.0,
         fx * fx + fy * fy - b * b))
-      if abs(perpendicular - float(RockRadius)) < 20_000.0:
-        continue
       let gotRock = float(rayRockDistanceUm(mx, my, dir))
-      check("the integer rock cast matches a float ray-cast within 2 mm",
-        abs(gotRock - rock) <= 2000.0, &"{gotRock} vs {rock}")
+      if abs(perpendicular - float(RockRadius)) < 20_000.0:
+        inc nearTangent
+        if (gotRock >= float(SensorRange)) != (rock >= float(SensorRange)):
+          ## A graze one side calls a hit and the other a miss. Bounded by
+          ## count, below, not by distance: the two answers are SensorRange
+          ## apart by construction.
+          inc grazeFlips
+        else:
+          check("a near-tangent rock cast still agrees within 5 mm",
+            abs(gotRock - rock) <= 5000.0, &"{gotRock} vs {rock}")
+      else:
+        inc pinned
+        check("the integer rock cast matches a float ray-cast within 2 mm",
+          abs(gotRock - rock) <= 2000.0, &"{gotRock} vs {rock}")
+  echo "rock casts: ", pinned, " pinned to 2 mm, ", nearTangent,
+    " near-tangent (", grazeFlips, " graze/miss flips)"
+  # The three numbers this sweep actually produces are 29 972 / 268 / 1. Pin
+  # the SHAPE of that: the wide class is a sliver, the flips are a handful, and
+  # the pinned class is the bulk -- so a change that made every ray
+  # "near-tangent" (or that stopped generating rays at all) fails here rather
+  # than passing vacuously.
+  check("the near-tangent class is a sliver of the sample",
+    nearTangent * 20 < pinned, $nearTangent & " vs " & $pinned)
+  check("only a handful of rays flip between a graze and a miss",
+    grazeFlips <= 5, $grazeFlips)
+  check("and the 2 mm pin still covers the bulk of the rays",
+    pinned > 25_000, $pinned)
 
 block closingSign:
   var sim = seatedSim()
