@@ -316,6 +316,16 @@ jobs:
           # coworld whose whole board fits the frame. DROP THIS FLAG ONLY if
           # the board is pannable, where drawing off-frame is normal -- the
           # count is still reported on stdout and in viewer-smoke.json.
+          #
+          # READ THE NUMBER THIS STEP PRINTS CORRECTLY: it is
+          # `canvas text: 0 drawn`, and 0 is EXPECTED here, not a pass.
+          # viewer_smoke.mjs wraps fillText/strokeText on the PAGE's
+          # CanvasRenderingContext2D, and this bundle draws every board string
+          # from a Worker's OffscreenCanvas out of sprites pixie baked Nim-side
+          # -- so the page's 2D context never sees a text call. A total of 0
+          # means the check covered nothing. The evidence for the text-bounds
+          # property is the "Worst-case text render fixture" step below, which
+          # draws 2 850 real fillText calls through the same harness.
           node tools/ci/viewer_smoke.mjs \
             --bundle dist/static-replay-viewer \
             --replay "${replay}" \
