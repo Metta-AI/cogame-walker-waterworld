@@ -461,7 +461,10 @@ proc turn*(
       elif engine.llmOff: "budget_guard"
       elif engine.client.throttled: "throttled"
       else: "parse_error"
-    result.add(fallbackRecord(turnIndex, seat, 2, cause,
+    ## The attempt count is what the seat ACTUALLY spent, not a constant 2: a
+    ## throttled turn breaks after attempt 1, and a phase-60 count of "seats
+    ## that used their retry" reads this field.
+    result.add(fallbackRecord(turnIndex, seat, clamp(attempt, 1, 2), cause,
       "seat fell back to the shoal intent"))
     ## "falling back" is the phrase phase 60 greps the GAME log for.
     echo "waterworld llm: seat ", seat, " falling back to shoal (", cause,

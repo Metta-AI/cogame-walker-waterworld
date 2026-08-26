@@ -371,6 +371,11 @@ block fakeProviderDrivesTheEngine:
         inc throttled
     check("and every seat's fallback names the throttle",
       throttled >= SkimmerCount, $throttled)
+    for record in records:
+      let node = parseJson(record)
+      if node{"detail"}.getStr() == "seat fell back to the shoal intent":
+        check("the terminal record counts the ONE attempt that was made",
+          node{"attempt"}.getInt() == 1, record)
     for seat in 0 ..< SkimmerCount:
       check("the seat still has a legal intent",
         engine.intents[seat].source == isFallback)
