@@ -1770,3 +1770,18 @@ authoritative.
 list it: the manifest is the consistent one. The key is left in place rather than deleted because
 removing a config field the starter's loader also reads is a change to the config contract, not a
 documentation fix.
+
+### Sensor rays are dimmed PER KIND, server-side, at every board size — there is no `.tiny` ray rule
+
+§Board says "Under `.tiny` (≤ 620 px board) only the hit rays are drawn, at half opacity." That
+rule cannot exist as written: the board packet is built server-side in `global.nim` and the server
+does not know any viewer's stage width, and the client half (`broadcast_core.js`) is the starter's
+dumb compositor, kept byte-for-byte apart from two lines, so it does not filter object ids either.
+
+What the tree does instead, unconditionally and at every size (`global.nim`, `rayAlpha` and
+`addRays`): a **clear** ray is drawn dim (α 0.30) with 3 pips and no hit disc; a ray that found
+something is drawn bright (α 0.95) with 5 pips and a hit disc at the end. So "the hit rays stand
+out and the clear ones recede" is delivered — by kind rather than by board width, and the 360 px
+frame stays legible because the clear spokes never read as a starburst. What IS `.tiny`-conditional
+is the DOM chrome: `#stage.tiny` hides `#ww-legend`, `.ww-thrust` and the nibble counters
+(`client/replay_broadcast.html`).
