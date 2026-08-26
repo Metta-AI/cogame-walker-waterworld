@@ -134,6 +134,19 @@ block legibleAt360:
     "flex: 1 1 auto;" in page and "min-width: 3.2em;" in page)
   check("labels are hidden under the tiny threshold",
     "#stage.tiny" in page)
+  # The labels hide by a CLASS TOGGLE on the measured board width, not by a
+  # `@media (max-width: 640px)` rule -- the starter's page sets `.tiny` at
+  # `boardW <= 620`, so a grep for "640px" finds nothing even though the rule
+  # fires below 640. Assert the NUMBER, so a starter bump that raised the
+  # threshold above 640 reddens this instead of passing on a literal match.
+  let toggleMarker = "stage.classList.toggle('tiny', boardW <= "
+  let toggleAt = page.find(toggleMarker)
+  check("the tiny toggle is a width comparison", toggleAt >= 0)
+  if toggleAt >= 0:
+    let start = toggleAt + toggleMarker.len
+    let threshold = parseInt(page[start ..< page.find(')', start)])
+    check("and it fires under the 640 px the checklist names",
+      threshold <= 640, $threshold)
   check("the ray legend goes at 360 px",
     "#stage.tiny #ww-legend" in page)
 

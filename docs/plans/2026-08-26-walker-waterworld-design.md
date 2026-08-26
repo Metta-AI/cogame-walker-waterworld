@@ -1687,3 +1687,14 @@ the string. Both deltas are now pinned two-sidedly in `test_viewer.nim`'s
 `broadcastCoreIsTheStarters` block (the waterworld text present, the starter's text absent).
 Nothing else in the file differs — `diff` against `coworld-ctf/client/broadcast_core.js` reports
 exactly those two lines.
+
+### "Labels hidden under 640 px" is the starter's `.tiny` class at ≤ 620 board px
+
+There is no `@media (max-width: 640px)` rule anywhere in `client/replay_broadcast.html`. The
+inherited chrome toggles `#stage.tiny` from `relayout()` on the MEASURED board width
+(`stage.classList.toggle('tiny', boardW <= 620)`, the starter's line, unmodified), and the game
+block hangs its hiding rules off that class: `#stage.tiny #ww-legend`, `#stage.tiny .ww-thrust`,
+`#stage.tiny .plate .ww-sub .ww-nibbles`. 620 ≤ 640, so labels do go below the width the
+acceptance checklist names — but a grep for `640px` finds nothing. `tests/test_viewer.nim` now
+parses the threshold out of the page and asserts it is ≤ 640 rather than matching the literal
+line, so a starter bump that raised it would fail the test.
