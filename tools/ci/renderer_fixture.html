@@ -23,6 +23,20 @@
 
   It sets data-replay-loaded="true" on its first drawn frame and keeps a ticking
   clock so the harness's soak sees the page advancing.
+
+  WHAT IT IS NOT
+  ==============
+  It is NOT the shipped renderer, and this repo has no `client/renderer.js` for
+  it to load: waterworld's board is composed NIM-SIDE in
+  src/waterworld/global.nim into pixie-baked sprites and blitted by
+  broadcast_core.js (the starter's architecture — see AGENTS.md, "The board is
+  Nim-side"). There is no JS entry point that draws the board, so `drawBoard()`
+  below is a hand-written stand-in that reproduces the band geometry by
+  arithmetic. That duplication is the fixture's one weakness, and it is pinned
+  rather than trusted: tests/test_viewer.nim re-derives BOARD_W/BOARD_H and the
+  band bounds from global.nim's own constants and fails if this file drifts
+  away from what the board actually reserves, exactly as it already does for
+  the 48/160-rune caps.
 -->
 <style>
   :root { --hudscale: 1; --u: calc(1px * var(--hudscale)); --band: 0px; --topband: 0px;
@@ -102,9 +116,12 @@
 
   // The bubble band the board reserves: view Y 7.10 .. 7.85 m on a 1200x800
   // logical board, emitted at RenderScale 2 -> board pixels 30 .. 180 of 1600.
-  var BOARD_W = 2400, BOARD_H = 1600;
-  var BAND_TOP = Math.round((8.0 - 7.85) * 100 * 2);
-  var BAND_BOTTOM = Math.round((8.0 - 7.10) * 100 * 2);
+  // These four numbers are re-derived from src/waterworld/global.nim by
+  // tests/test_viewer.nim; they are literals so that test can read them.
+  var BOARD_W = 2400;
+  var BOARD_H = 1600;
+  var BAND_TOP = 30;
+  var BAND_BOTTOM = 180;
 
   function drawBoard(canvas) {
     var ctx = canvas.getContext('2d');

@@ -600,6 +600,18 @@ proc addFx(
         ZFx, text.id, text.w, text.h)
     inc slot
 
+proc bubbleBandCentreY*(): int =
+  ## The board y the bubble pills are centred on: the reserved band at the top
+  ## of the tank, view Y 7.50 m. Exported because tools/ci/renderer_fixture.html
+  ## reproduces the band by hand and tests/test_viewer.nim pins its numbers
+  ## against this one.
+  int((int64(ArenaH - 7_500_000) * int64(RenderScale)) div int64(BoardScaleUm))
+
+proc bubblePillHeight*(): int =
+  ## The pill's height in board pixels: one 26 px line box plus 6 px of padding
+  ## above and below, as `bubbleSprite` builds it.
+  26 + 6 * 2
+
 proc bubbleSlotX*(slot, slots, spriteW: int): int =
   ## The centre x of one bubble slot, CLAMPED so a wide pill cannot hang off
   ## either edge of the board. `place()` subtracts half the sprite width, and a
@@ -621,7 +633,7 @@ proc addBubbles(
   ## The band is sized from MaxSayRunes measured in the board face, which is
   ## what makes `viewer_smoke.mjs --strict-text-bounds` pass on a fixed tank.
   var slot = 0
-  let bandY = boardY(int32(ArenaH - 7_500_000))
+  let bandY = bubbleBandCentreY()
   for bubble in sim.bubbles:
     if bubble.untilTick <= sim.tickCount or slot >= 3:
       continue

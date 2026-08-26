@@ -209,6 +209,37 @@ block rendererFixtureStillTestsTheCaps:
     ($MaxSayRunes & "-rune cap") in fixture and
       ($MaxNoteRunes & "-rune cap") in fixture)
 
+  ## The fixture's `drawBoard()` is a hand-written stand-in -- this repo has no
+  ## `client/renderer.js` to load, because the board is composed Nim-side and
+  ## blitted (AGENTS.md, "The board is Nim-side"). So the geometry it duplicates
+  ## is re-derived here from global.nim's own constants: if the band moved and
+  ## the fixture did not, the fixture would be measuring the wrong strip of a
+  ## canvas and its `never_inside: 0` would stop meaning anything.
+  proc fixtureNumber(name: string): int =
+    let marker = "var " & name & " = "
+    let at = fixture.find(marker)
+    doAssert at >= 0, name & " is missing from the fixture"
+    var stop = at + marker.len
+    while stop < fixture.len and fixture[stop] in Digits: inc stop
+    parseInt(fixture[at + marker.len ..< stop])
+
+  check("the fixture's board is the board the renderer emits",
+    fixtureNumber("BOARD_W") == BoardW and fixtureNumber("BOARD_H") == BoardH,
+    $fixtureNumber("BOARD_W") & "x" & $fixtureNumber("BOARD_H") & " vs " &
+      $BoardW & "x" & $BoardH)
+  let
+    bandTop = fixtureNumber("BAND_TOP")
+    bandBottom = fixtureNumber("BAND_BOTTOM")
+    pillTop = bubbleBandCentreY() - bubblePillHeight() div 2
+    pillBottom = bubbleBandCentreY() + bubblePillHeight() div 2
+  check("the fixture's band holds the pill the renderer actually places",
+    bandTop <= pillTop and bandBottom >= pillBottom,
+    $bandTop & ".." & $bandBottom & " vs pill " & $pillTop & ".." & $pillBottom)
+  check("and the band is inside the board",
+    bandTop >= 0 and bandBottom <= BoardH, $bandTop & ".." & $bandBottom)
+  check("the fixture says out loud that it is not the shipped renderer",
+    "It is NOT the shipped renderer" in fixture)
+
 block bubblesStayOnTheBoard:
   ## The speech-bubble pill is centred on one of three fixed slots and sized
   ## from the text, so a full-cap `say` of wide glyphs is what runs off the
