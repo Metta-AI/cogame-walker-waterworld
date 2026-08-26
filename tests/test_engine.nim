@@ -2,7 +2,9 @@
 ## LLM client with no credentials disables itself, which is exactly the path a
 ## test can drive and exactly the path certification takes.
 
-import std/[json, monotimes, os, strutils, times]
+import std/[atomics, json, monotimes, net, os, strutils, times]
+
+import mummy
 
 import helpers
 import waterworld/[sim, roster, sensors, intents, control, baselines, decide, llm]
@@ -19,6 +21,21 @@ proc check(name: string, ok: bool, detail = "") =
 putEnv("ANTHROPIC_API_KEY", "")
 putEnv("AWS_ENDPOINT_URL_BEDROCK_RUNTIME", "")
 putEnv("AWS_BEARER_TOKEN_BEDROCK", "")
+
+proc freeLocalPort(): int =
+  ## mummy does not report the port it bound, so pick one that is free right
+  ## now and hand it over. The window between the probe and the bind is the
+  ## reason for the range rather than a single hard-coded port.
+  for candidate in 39_641 .. 39_680:
+    try:
+      let probe = newSocket()
+      probe.setSockOpt(OptReuseAddr, true)
+      probe.bindAddr(Port(candidate), "127.0.0.1")
+      probe.close()
+      return candidate
+    except CatchableError:
+      discard
+  0
 
 proc framesFor(sim: SimServer): seq[SensorFrame] =
   for seat in 0 ..< SkimmerCount:
@@ -166,6 +183,219 @@ block deadlineArithmetic:
   check("the absolute worst case fits inside the engine stop",
     worst < config.wallClockBudgetSeconds,
     $worst & " vs " & $config.wallClockBudgetSeconds)
+
+# ---------------------------------------------------------------------------
+#  A FAKE PROVIDER: a real HTTP server on 127.0.0.1, driven through the real
+#  curly batch path. The engine cannot tell it from Bedrock, so the retry,
+#  throttle, budget and batching behaviour asserted below is the engine's own.
+# ---------------------------------------------------------------------------
+type FakeMode = enum
+  fmGood,          ## every reply parses
+  fmGarbageThenGood,  ## the first batch is unusable, the second parses
+  fmGarbage,       ## every reply is unusable
+  fmThrottled,     ## every reply is a 429
+  fmHung           ## every reply arrives long after the deadline
+
+var
+  fakeMode: Atomic[int]
+  fakeHoldMs: Atomic[int]
+  fakeSeen: Atomic[int]        ## requests the fake has answered, total
+  fakeInFlight: Atomic[int]
+  fakeMaxInFlight: Atomic[int]
+
+proc fakeReset(mode: FakeMode, holdMs = 0) =
+  fakeMode.store(ord(mode), moRelaxed)
+  fakeHoldMs.store(holdMs, moRelaxed)
+  fakeSeen.store(0, moRelaxed)
+  fakeInFlight.store(0, moRelaxed)
+  fakeMaxInFlight.store(0, moRelaxed)
+
+proc replyBody(intent: string): string =
+  """{"content":[{"type":"text","text":""" & escapeJson(intent) &
+    """}],"stop_reason":"end_turn"}"""
+
+proc fakeHandler(request: Request) {.gcsafe.} =
+  let index = fakeInFlight.fetchAdd(1, moSequentiallyConsistent) + 1
+  var seen = fakeMaxInFlight.load(moSequentiallyConsistent)
+  while index > seen and
+      not fakeMaxInFlight.compareExchange(seen, index, moSequentiallyConsistent):
+    seen = fakeMaxInFlight.load(moSequentiallyConsistent)
+  let ordinal = fakeSeen.fetchAdd(1, moSequentiallyConsistent) + 1
+  let mode = FakeMode(fakeMode.load(moRelaxed))
+  # Holding every reply for the same interval is what makes the in-flight high
+  # water mark meaningful: a caller that queried the seats one after another
+  # would never see two at once.
+  sleep(fakeHoldMs.load(moRelaxed))
+  var headers: HttpHeaders
+  headers["content-type"] = "application/json"
+  case mode
+  of fmGood:
+    request.respond(200, headers, replyBody(
+      """{"mode":"hunt","target":"F1","throttle":0.5,"note":"fake"}"""))
+  of fmGarbageThenGood:
+    if ordinal <= SkimmerCount:
+      request.respond(200, headers, replyBody("no json here at all"))
+    else:
+      request.respond(200, headers, replyBody(
+        """{"mode":"escort","partner":"SKIM-2","throttle":0.25}"""))
+  of fmGarbage:
+    request.respond(200, headers, replyBody("no json here at all"))
+  of fmThrottled:
+    request.respond(429, headers, """{"message":"too many requests"}""")
+  of fmHung:
+    sleep(4000)
+    request.respond(200, headers, replyBody("""{"mode":"hold"}"""))
+  discard fakeInFlight.fetchSub(1, moSequentiallyConsistent)
+
+proc fakeServe(args: tuple[server: Server, port: int]) {.thread.} =
+  try:
+    args.server.serve(Port(args.port), "127.0.0.1")
+  except CatchableError:
+    discard
+
+block fakeProviderDrivesTheEngine:
+  ## What the note's §Tests 6 and 7 ask for, against a fake provider:
+  ##   * all four seats are in flight at the same moment (ONE batch);
+  ##   * an unusable reply on attempt 1 costs EXACTLY one retry;
+  ##   * a throttled provider costs ZERO retries;
+  ##   * two consecutive failures leave the seat on the `shoal` intent with a
+  ##     `fallback` record naming the cause;
+  ##   * a hung provider is cut off by the per-turn budget.
+  let fakePort = freeLocalPort()
+  check("a local port is free for the fake provider", fakePort > 0)
+  let fakeServer = newServer(fakeHandler, workerThreads = 8)
+  var serverThread: Thread[tuple[server: Server, port: int]]
+  createThread(serverThread, fakeServe, (fakeServer, fakePort))
+  var up = false
+  for _ in 0 ..< 200:
+    try:
+      let probe = dial("127.0.0.1", Port(fakePort))
+      probe.close()
+      up = true
+      break
+    except CatchableError:
+      sleep(25)
+  check("the fake provider is listening", up)
+
+  putEnv("AWS_ENDPOINT_URL_BEDROCK_RUNTIME", "http://127.0.0.1:" & $fakePort)
+  putEnv("AWS_BEARER_TOKEN_BEDROCK", "fake-token")
+  var sim = seatedSim()
+  sim.config.turnSpacingMs = 0
+  sim.config.attempt1Ms = 2000
+  sim.config.retryMs = 2000
+  sim.config.turnBudgetMs = 9000
+  var engine = initDecisionEngine(sim)
+  putEnv("AWS_ENDPOINT_URL_BEDROCK_RUNTIME", "")
+  putEnv("AWS_BEARER_TOKEN_BEDROCK", "")
+  check("the fake client took the bedrock transport",
+    engine.client.transport == ltBedrock and not engine.client.disabled)
+  for seat in 0 ..< SkimmerCount:
+    engine.seats[seat].isLlm = true
+    engine.seats[seat].prompt = "seat " & $seat
+
+  block oneBatchNotFourCalls:
+    # Warm-up turn first: libcurl holds back the rest of a batch until the
+    # FIRST transfer to a new host has revealed whether the connection can be
+    # multiplexed, so a cold pool would serialise the first reply no matter what
+    # the engine does. One throwaway batch fills the pool; the measured batch
+    # below then rides it.
+    fakeReset(fmGood)
+    discard engine.turn(sim, sim.framesFor(), 0, 0)
+    check("the warm-up batch reached the fake",
+      fakeSeen.load(moSequentiallyConsistent) == SkimmerCount,
+      $fakeSeen.load(moSequentiallyConsistent))
+    fakeReset(fmGood, holdMs = 300)
+    let records = engine.turn(sim, sim.framesFor(), 0, 0)
+    check("the good turn issued exactly one request per seat",
+      fakeSeen.load(moSequentiallyConsistent) == SkimmerCount, $fakeSeen.load(moSequentiallyConsistent))
+    check("all four seats were in flight at the same moment",
+      fakeMaxInFlight.load(moSequentiallyConsistent) == SkimmerCount,
+      $fakeMaxInFlight.load(moSequentiallyConsistent))
+    for seat in 0 ..< SkimmerCount:
+      check("seat " & $seat & " is flying the LLM's own intent",
+        engine.intents[seat].source == isLlm and
+          engine.intents[seat].mode == mHunt)
+    for record in records:
+      check("a good turn records no fallback",
+        parseJson(record){"k"}.getStr() != "fallback", record)
+
+  block exactlyOneRetry:
+    fakeReset(fmGarbageThenGood)
+    let records = engine.turn(sim, sim.framesFor(), 1, 0)
+    check("an unusable first batch costs exactly one retry",
+      fakeSeen.load(moSequentiallyConsistent) == 2 * SkimmerCount, $fakeSeen.load(moSequentiallyConsistent))
+    for seat in 0 ..< SkimmerCount:
+      check("the retry's answer is the one that flies",
+        engine.intents[seat].source == isLlm and
+          engine.intents[seat].mode == mEscort)
+    var attemptOneFallbacks = 0
+    for record in records:
+      let node = parseJson(record)
+      if node{"k"}.getStr() == "fallback":
+        check("the attempt-1 failure is recorded as attempt 1",
+          node{"attempt"}.getInt() == 1, record)
+        check("and named a parse_error",
+          node{"cause"}.getStr() == "parse_error", record)
+        inc attemptOneFallbacks
+    check("one per seat", attemptOneFallbacks == SkimmerCount,
+      $attemptOneFallbacks)
+
+  block twoFailuresLandOnShoal:
+    fakeReset(fmGarbage)
+    let records = engine.turn(sim, sim.framesFor(), 2, 0)
+    check("two unusable batches are two batches and no more",
+      fakeSeen.load(moSequentiallyConsistent) == 2 * SkimmerCount, $fakeSeen.load(moSequentiallyConsistent))
+    for seat in 0 ..< SkimmerCount:
+      check("the seat lands on the shoal intent",
+        engine.intents[seat].source == isFallback)
+    var terminal = 0
+    for record in records:
+      let node = parseJson(record)
+      if node{"detail"}.getStr() == "seat fell back to the shoal intent":
+        check("the terminal record says both attempts were spent",
+          node{"attempt"}.getInt() == 2, record)
+        inc terminal
+    check("with one terminal fallback record per seat",
+      terminal == SkimmerCount, $terminal)
+
+  block throttledMeansNoRetry:
+    fakeReset(fmThrottled)
+    let records = engine.turn(sim, sim.framesFor(), 3, 0)
+    check("a 429 costs ZERO retries",
+      fakeSeen.load(moSequentiallyConsistent) == SkimmerCount, $fakeSeen.load(moSequentiallyConsistent))
+    var throttled = 0
+    for record in records:
+      let node = parseJson(record)
+      if node{"k"}.getStr() == "fallback" and
+          node{"cause"}.getStr() == "throttled":
+        inc throttled
+    check("and every seat's fallback names the throttle",
+      throttled >= SkimmerCount, $throttled)
+    for seat in 0 ..< SkimmerCount:
+      check("the seat still has a legal intent",
+        engine.intents[seat].source == isFallback)
+
+  block theBudgetCutsOffAHungProvider:
+    fakeReset(fmHung)
+    let started = getMonoTime()
+    let records = engine.turn(sim, sim.framesFor(), 4, 0)
+    let elapsed = (getMonoTime() - started).inMilliseconds.int
+    check("a hung provider does not outlive the per-turn budget",
+      elapsed <= sim.config.turnBudgetMs + 2000, $elapsed)
+    for seat in 0 ..< SkimmerCount:
+      check("and the seat plays the shoal intent",
+        engine.intents[seat].source == isFallback)
+    var timeouts = 0
+    for record in records:
+      let node = parseJson(record)
+      if node{"k"}.getStr() == "fallback" and
+          node{"cause"}.getStr() in ["timeout", "transport_error"]:
+        inc timeouts
+    check("with the wait recorded as a timeout", timeouts >= SkimmerCount,
+      $timeouts)
+
+  fakeServer.close()
+  joinThread(serverThread)
 
 block wallClockStop:
   var sim = seatedSim()
