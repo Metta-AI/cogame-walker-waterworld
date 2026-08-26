@@ -148,6 +148,11 @@ block runeBoundaryEmoji:
     sanitized.validateUtf8() == -1)
   check("sanitizeSay strips a leading brace",
     not sanitizeSay("{oops").startsWith("{"))
+  check("and only a LEADING one: an interior brace is printable ASCII",
+    sanitizeSay("a {tight} squeeze") == "a {tight} squeeze",
+    sanitizeSay("a {tight} squeeze"))
+  check("a line of nothing but braces sanitizes to nothing",
+    sanitizeSay("{{{") == "", sanitizeSay("{{{"))
   let mixed = sanitizeSay("hold \u{1F41F} it")
   check("sanitizeSay drops non-ASCII whole, never half a codepoint",
     mixed.validateUtf8() == -1 and "\u{1F41F}" notin mixed, mixed)

@@ -72,16 +72,19 @@ proc sanitizeSay*(text: string): string =
   ## FIRST, then run through the printable-ASCII shout filter. In that order the
   ## rune cut never leaves half a codepoint for the ASCII filter to smear.
   ##
-  ## Braces are excluded deliberately: the replay chat stream carries the
-  ## control records as JSON objects and tells them from a skimmer's line by a
-  ## leading '{', so a line that could start with one would make that
-  ## discrimination ambiguous.
+  ## A LEADING brace is excluded: the replay chat stream carries the control
+  ## records as JSON objects and tells them from a skimmer's line by a leading
+  ## '{' (`replays.nim:251`, `roster.nim:50`), so a line that could start with
+  ## one would make that discrimination ambiguous. Braces anywhere else are
+  ## printable ASCII like any other character and are kept.
   result = ""
   for rune in text.truncateRunes(MaxSayRunes).runes:
     let value = int(rune)
-    if value >= 32 and value < 127 and value != ord('{') and value != ord('}'):
+    if value >= 32 and value < 127:
       result.add($rune)
   result = result.strip()
+  while result.len > 0 and result[0] == '{':
+    result = result[1 .. ^1].strip()
 
 proc sanitizeNote*(text: string): string =
   ## The operator's own reasoning line, as it reaches the replay and the match
