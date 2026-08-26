@@ -3,7 +3,7 @@
 
 import std/[os, strutils]
 
-import std/sha1
+import crunchy/sha256
 
 import helpers
 import waterworld/[sim, broadcast, global]
@@ -26,15 +26,19 @@ const
   ## client/chrome_common.js is inherited from coworld-ctf BYTE FOR BYTE — zero
   ## edits. Its CTF-specific paths (perks, handicaps, lives, the flag story)
   ## stay in the file and are inert because the corresponding state fields are
-  ## simply absent from waterworld's stream. This is the sha1 of the starter's
-  ## copy at the fork point; if it changes, the file was edited and the fork is
-  ## no longer the starter's chrome.
-  ChromeCommonSha1 = "D970EBE4EFF1B0154BA604B4E9ADF62D601CB3EB"
+  ## simply absent from waterworld's stream. This is the SHA-256 of the
+  ## starter's copy at the fork point, as the design note specifies; if it
+  ## changes, the file was edited and the fork is no longer the starter's
+  ## chrome.
+  ChromeCommonSha256 =
+    "7ace7287e0d19bf0fddb2362c55e4d76dfb44adcd4fbc8d1743b0557ced72f7c"
 
 block chromeIsByteIdentical:
-  let actual = $secureHash(chrome)
+  var actual = ""
+  for b in sha256(chrome):
+    actual.add(toHex(b).toLowerAscii())
   check("chrome_common.js is byte-identical to the starter's copy",
-    actual == ChromeCommonSha1, actual & " vs " & ChromeCommonSha1)
+    actual == ChromeCommonSha256, actual & " vs " & ChromeCommonSha256)
   check("chrome_common.js still exposes the shared chrome factory",
     "window.ChromeCommon = function (ctx)" in chrome)
 
@@ -277,7 +281,7 @@ block matchedPairFlagsAndBootstrap:
 block noStarterIdentifiersSurvive:
   ## No ctf_/CTF_/paintball identifier survives in client/, replay-viewer/ or
   ## src/ — EXCEPT inside client/chrome_common.js, which is inherited byte for
-  ## byte by contract (the sha1 above is the stronger assertion, and the file's
+  ## byte by contract (the sha256 above is the stronger assertion, and the file's
   ## `window.CTF_WIRE` read falls back to literals this test pins to the engine).
   for dir in ["client", "replay-viewer", "src"]:
     for path in walkDirRec(repoRoot() / dir):

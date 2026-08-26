@@ -40,7 +40,7 @@ WATERWORLD_WRITE_GOLDEN=1 nim r --path:src tests/test_determinism.nim
 ## The chrome is the starter's, not a lookalike
 
 `client/chrome_common.js` is `coworld-ctf`'s file **byte for byte** and
-`tests/test_viewer.nim` pins its sha1. `client/replay_broadcast.html` is the
+`tests/test_viewer.nim` pins its sha256. `client/replay_broadcast.html` is the
 starter's page with the game block appended, and it is regenerated — not
 hand-edited — by:
 
