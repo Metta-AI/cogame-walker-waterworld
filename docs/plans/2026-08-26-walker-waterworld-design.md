@@ -1698,3 +1698,21 @@ block hangs its hiding rules off that class: `#stage.tiny #ww-legend`, `#stage.t
 acceptance checklist names — but a grep for `640px` finds nothing. `tests/test_viewer.nim` now
 parses the threshold out of the page and asserts it is ≤ 640 rather than matching the literal
 line, so a starter bump that raised it would fail the test.
+
+### The six object sprites are generated PNGs, not pixie bakes from the starter's plates
+
+§Board art says the rock, skimmer hulls, plankton and poison discs are "baked once at startup with
+**pixie** … using ctf's shipped `data/arena_floor.png` and `client/art/walls/wall_h.jpg`/`wall_v.jpg`".
+Half of that is true of the tree and half is not:
+
+- **True.** The water field, the caustics, the tank rim and the vignette are pixie bakes, and the
+  rim plates are the starter's `wall_h.jpg`/`wall_v.jpg` byte for byte, moved to
+  `data/art/rim_{h,v}.jpg` because `data/` is the one directory the emscripten build preloads
+  (`global.nim`, `replay-viewer/config.nims`).
+- **Not true.** `data/art/{skim_1..4,plankton,poison,rock}.png` are committed PNGs, not bakes.
+  They are cut by `scripts/art/split_sheet.py` from two sheets in `scripts/art/source/` rendered
+  with `gemini-2.5-flash-image` (`playbooks/art-nanobanana.md`), and `global.nim`'s
+  `bakeArtSprite` loads and composites them. They are real per-role art with a committed
+  generator and a committed source sheet — not solid-colour placeholders and not a runtime
+  download — but the note's "no downloaded art" sentence should read "no art downloaded at run
+  time": the sheets were generated once, offline, and are in the repo.
