@@ -190,7 +190,7 @@ proc playerIdentity(request: Request, slot: int, token: string): string =
   if result.len == 0:
     result = "Baseline (" & $(max(0, slot) + 1) & ")"
 
-proc parseRegistration(
+proc parseRegistration*(
   text: string
 ): tuple[ok: bool, prompt, scripted, policy: string] =
   ## A seat's ONE Sprite v1 chat message, read as its registration:

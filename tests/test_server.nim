@@ -6,7 +6,7 @@ import std/[json, os, strutils]
 
 import helpers
 import waterworld/[sim, roster, sensors, intents, decide, llm, broadcast,
-  wire_constants]
+  server, wire_constants]
 
 var failures = 0
 proc check(name: string, ok: bool, detail = "") =
@@ -15,27 +15,10 @@ proc check(name: string, ok: bool, detail = "") =
     echo "FAIL ", name, (if detail.len > 0: ": " & detail else: "")
 
 block registrationParsing:
-  ## The server's own parser, re-declared here in the shape the server uses it:
-  ## anything that is not the register object is not a registration, and a
+  ## THE SERVER'S OWN PARSER, imported from `waterworld/server` rather than
+  ## re-declared here: a copy would pass while the shipped one drifted.
+  ## Anything that is not the register object is not a registration, and a
   ## seat's chat is never written to the replay chat stream.
-  proc parseRegistration(text: string): tuple[
-      ok: bool, prompt, scripted, policy: string] =
-    result = (false, "", "", "")
-    if text.len == 0 or text[0] != '{':
-      return
-    var node: JsonNode
-    try:
-      node = parseJson(text)
-    except CatchableError:
-      return
-    if node.kind != JObject or node{"type"}.getStr() != "register":
-      return
-    result.ok = true
-    result.prompt = node{"prompt"}.getStr()
-    if not node{"scripted"}.isNil and node{"scripted"}.kind == JString:
-      result.scripted = node{"scripted"}.getStr()
-    result.policy = node{"policy"}.getStr()
-
   let llmSeat = parseRegistration(
     """{"type":"register","prompt":"hunt in pairs","scripted":null,"policy":"tandemhunt"}""")
   check("an LLM registration parses", llmSeat.ok)
