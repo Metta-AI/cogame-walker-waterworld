@@ -102,8 +102,9 @@
   }
   check('say is exactly the 48-rune cap', runeLen(SAY) === 48, runeLen(SAY));
   check('note is exactly the 160-rune cap', runeLen(NOTE) === 160, runeLen(NOTE));
+  // 7 speeds: the engine's six PlaybackSpeeds plus the replay-only 0.5x.
   check('wire constants spliced', !!(window.WATERWORLD_WIRE &&
-    window.WATERWORLD_WIRE.speeds && window.WATERWORLD_WIRE.speeds.length === 6),
+    window.WATERWORLD_WIRE.speeds && window.WATERWORLD_WIRE.speeds.length === 7),
     JSON.stringify(window.WATERWORLD_WIRE || null));
   check('chrome_common present', typeof window.ChromeCommon === 'function');
 
