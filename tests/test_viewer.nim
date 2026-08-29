@@ -23,24 +23,43 @@ let
   worker = readRepoFile("replay-viewer/static_replay_worker.js")
 
 const
-  ## client/chrome_common.js is inherited from coworld-ctf BYTE FOR BYTE — zero
-  ## edits. Its CTF-specific paths (perks, handicaps, lives, the flag story)
-  ## stay in the file and are inert because the corresponding state fields are
-  ## simply absent from waterworld's stream. This is the SHA-256 of the
-  ## starter's copy at the fork point, as the design note specifies; if it
-  ## changes, the file was edited and the fork is no longer the starter's
-  ## chrome.
+  ## client/chrome_common.js is coworld-ctf's, plus the fleet-wide replay
+  ## transport patch and NOTHING else: the 0.5x half-speed entry in the SPEEDS
+  ## fallback and the matching `0.5: '5'` chip command. Its CTF-specific paths
+  ## (perks, handicaps, lives, the flag story) stay in the file and are inert
+  ## because the corresponding state fields are simply absent from waterworld's
+  ## stream. This is the SHA-256 of that exact file; if it changes, the chrome
+  ## was edited beyond the patch. (Starter fork point:
+  ## 7ace7287e0d19bf0fddb2362c55e4d76dfb44adcd4fbc8d1743b0557ced72f7c, 40022 B.)
   ChromeCommonSha256 =
-    "7ace7287e0d19bf0fddb2362c55e4d76dfb44adcd4fbc8d1743b0557ced72f7c"
+    "594ed4a72cd908922c982d0f3e3ffb04ae1d97568fcd5f5daa794042662a369c"
+  ChromeCommonBytes = 40037
 
 block chromeIsByteIdentical:
   var actual = ""
   for b in sha256(chrome):
     actual.add(toHex(b).toLowerAscii())
-  check("chrome_common.js is byte-identical to the starter's copy",
+  check("chrome_common.js is byte-identical to the pinned copy",
     actual == ChromeCommonSha256, actual & " vs " & ChromeCommonSha256)
+  check("chrome_common.js is the pinned length",
+    chrome.len == ChromeCommonBytes, $chrome.len)
   check("chrome_common.js still exposes the shared chrome factory",
     "window.ChromeCommon = function (ctx)" in chrome)
+  check("the transport offers a 1/2x chip",
+    "map = { 0.5: '5', 1: '1'" in chrome)
+
+block theBoardPageDrivesTheTransportFromTheKeyboard:
+  ## replay_broadcast.html is the ONLY page this repo ships (the static bundle's
+  ## index.html is this file with the three markers spliced), so its keydown
+  ## handler is the whole keyboard story: Space pauses, and the digit row
+  ## reaches the engine's speed commands — which is how '5' selects 1/2x.
+  check("Space is bound on the page", "if (k === ' ') { ev.preventDefault(); togglePlay(); }" in page)
+  check("and play/pause goes down the command channel as ' '",
+    "function togglePlay() { send(' '); }" in page)
+  check("the digit row is forwarded verbatim",
+    "else if (k >= '1' && k <= '9') send(k);" in page)
+  check("the page hosts the shared chrome's speed chips",
+    "id=\"speedchips\"" in page)
 
 block relayoutIsTheStarters:
   check("relayout() is present", "function relayout() {" in page)
@@ -337,8 +356,9 @@ block matchedPairFlagsAndBootstrap:
 block noStarterIdentifiersSurvive:
   ## No ctf_/CTF_/paintball identifier survives in client/, replay-viewer/ or
   ## src/ — EXCEPT inside client/chrome_common.js, which is inherited byte for
-  ## byte by contract (the sha256 above is the stronger assertion, and the file's
-  ## `window.CTF_WIRE` read falls back to literals this test pins to the engine).
+  ## byte by contract apart from the replay-transport patch (the sha256 above is
+  ## the stronger assertion, and the file's `window.CTF_WIRE` read falls back to
+  ## literals tests/test_server.nim pins to the engine's wire block).
   for dir in ["client", "replay-viewer", "src"]:
     for path in walkDirRec(repoRoot() / dir):
       if path.endsWith("chrome_common.js"):

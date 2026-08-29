@@ -207,6 +207,62 @@ block strictUtf8Forensics:
     check("the non-ASCII policy label survived the round trip",
       "\u{1F41F}" in output, "no emoji in the summary")
 
+# --- the replay-only 1/2x playback speed -----------------------------------
+block halfSpeedIsAReplayOnlyCrawl:
+  ## Command '5' selects ReplayHalfSpeedIndex: the chrome shows 0.5, every
+  ## integer consumer still sees 1, and the step budget spends one tick every
+  ## OTHER frame outside a skipped lull.
+  var replay = ReplayPlayer()
+  replay.speedIndex = 0
+  applySpeedCommand(replay.speedIndex, '5')
+  check("'5' selects 1/2x", replay.speedIndex == ReplayHalfSpeedIndex,
+    $replay.speedIndex)
+  check("the chrome speed at 1/2x is 0.5",
+    replay.replayDisplaySpeed() == 0.5, $replay.replayDisplaySpeed())
+  check("the integer speed clamps to 1x at 1/2x",
+    replay.replaySpeed() == 1, $replay.replaySpeed())
+  replay.skipLulls = false
+  replay.halfPhase = false
+  check("an even frame at 1/2x spends no tick", replay.replayStepBudget(0) == 0,
+    $replay.replayStepBudget(0))
+  replay.halfPhase = true
+  check("an odd frame at 1/2x spends one tick", replay.replayStepBudget(0) == 1,
+    $replay.replayStepBudget(0))
+  applySpeedCommand(replay.speedIndex, '+')
+  check("'+' from 1/2x lands on 1x", replay.speedIndex == 0, $replay.speedIndex)
+  check("1x shows as 1.0", replay.replayDisplaySpeed() == 1.0,
+    $replay.replayDisplaySpeed())
+  applySpeedCommand(replay.speedIndex, '-')
+  check("'-' from 1x lands on 1/2x",
+    replay.speedIndex == ReplayHalfSpeedIndex, $replay.speedIndex)
+  applySpeedCommand(replay.speedIndex, '-')
+  check("1/2x is the floor", replay.speedIndex == ReplayHalfSpeedIndex,
+    $replay.speedIndex)
+  applySpeedCommand(replay.speedIndex, '6')
+  check("'6' still selects 16x", replay.replayDisplaySpeed() == 16.0,
+    $replay.replayDisplaySpeed())
+
+block halfSpeedPlaysTheRealReplayAtHalfPace:
+  ## The pace on the REAL playback path: eight frames of advanceReplayPlayback
+  ## on the recorded episode spend eight ticks at 1x and four at 1/2x.
+  proc ticksOver(frames: int, command: char): int =
+    var runtime = initReplayRuntime(data, mismatchQuit = false,
+      gameEventLoggingEnabled = false)
+    var player = runtime.player
+    var sim = runtime.sim
+    player.skipLulls = false
+    player.playing = true
+    player.applyReplayCommand(sim, command)
+    let before = sim.tickCount
+    let noop = proc () = discard
+    for _ in 0 ..< frames:
+      player.advanceReplayPlayback(sim, noop, noop)
+    sim.tickCount - before
+  let full = ticksOver(8, '1')
+  let half = ticksOver(8, '5')
+  check("1x spends one tick per frame", full == 8, $full)
+  check("1/2x spends half as many", half == full div 2, $half & " vs " & $full)
+
 removeDir(work)
 if failures > 0:
   quit("test_replay: " & $failures & " failure(s)", 1)

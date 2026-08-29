@@ -1785,3 +1785,23 @@ out and the clear ones recede" is delivered — by kind rather than by board wid
 frame stays legible because the clear spokes never read as a starburst. What IS `.tiny`-conditional
 is the DOM chrome: `#stage.tiny` hides `#ww-legend`, `.ww-thrust` and the nibble counters
 (`client/replay_broadcast.html`).
+
+### `chrome_common.js` carries the fleet-wide replay-transport patch, and the speeds list leads with 0.5×
+
+§Viewer and the "kept verbatim" table say `client/chrome_common.js` is coworld-ctf's copy
+**byte-for-byte, zero edits**, and §Chrome lists the transport speeds as `[1,2,3,4,8,16]`. The tree
+now applies the fleet-wide replay-transport patch to that file, and nothing else:
+
+- `SPEEDS = WIRE.speeds || [0.5, 1, 2, 3, 4, 8, 16]` — the fallback the file actually runs on (it
+  reads the starter's `window.CTF_WIRE`, which this game does not emit; the read is left alone and
+  `tests/test_server.nim` pins the fallback equal to `WireConstantsJs`'s `speeds`);
+- the chip command map gains `0.5: '5'`.
+
+`tests/test_viewer.nim` pins the patched file by sha256 and length (starter fork point:
+`7ace7287…`, 40 022 B) so no further drift is silent. The 0.5× entry is a REPLAY-only speed:
+`replays.nim`'s `ReplayHalfSpeedIndex` (-1) spends one sim tick every other frame via `halfPhase`
+parity in `replayStepBudget`, `replayDisplaySpeed()` reports 0.5 into the frame JSON's `sp` (which
+is a float now), and `replaySpeed()` still clamps to `PlaybackSpeeds[0]` for every integer consumer,
+so the live server loop is unchanged. `WireConstantsJs` therefore emits
+`speeds:[0.5,1,2,3,4,8,16]` — 0.5 rides ahead of the engine's integer `PlaybackSpeeds`, which are
+untouched.

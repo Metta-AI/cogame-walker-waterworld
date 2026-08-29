@@ -265,7 +265,9 @@ proc buildStateJson*(
   sim: SimServer,
   events: JsonNode,
   playing: bool,
-  speed: int,
+  # `speed` is the speed the chrome SHOWS (`sp`), which is fractional at the
+  # replay-only 1/2x — not the engine's integer PlaybackSpeeds value.
+  speed: float,
   maxTick: int,
   looping: bool,
   transportEnabled: bool,

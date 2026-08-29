@@ -725,7 +725,7 @@ proc runServerLoop*(
             globalStates[i], nextState, sim.tickCount, true, 1,
             config.maxTicks, false, false, -1)
           live.addChromeSprite(sim.buildStateJson(
-            frameEvents, true, 1, config.maxTicks, false, false, -1))
+            frameEvents, true, 1.0, config.maxTicks, false, false, -1))
           live
       if packet.len == 0:
         continue

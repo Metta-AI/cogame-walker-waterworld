@@ -6,10 +6,10 @@
 ## `tools/gen_wire_constants.nim` emits it for the static wasm bundle.
 ##
 ## Clients read `window.WATERWORLD_WIRE`. `client/chrome_common.js` is inherited
-## from the starter BYTE FOR BYTE and still reads the STARTER's wire global, so
-## it runs on its own documented fallbacks (`[1,2,3,4,8,16]`, fps 24) —
-## `tests/test_viewer.nim` pins those literals equal to `PlaybackSpeeds` and
-## `ReplayFps`, so the fallback can never drift from the engine.
+## from the starter and still reads the STARTER's wire global, so it runs on its
+## own documented fallbacks (`[0.5,1,2,3,4,8,16]`, fps 24) —
+## `tests/test_server.nim` pins those literals equal to this block's `speeds`
+## and to `ReplayFps`, so the fallback can never drift from the engine.
 
 import std/strutils
 
@@ -23,7 +23,10 @@ proc jsIntArray(values: openArray[int]): string =
   result.add "]"
 
 const WireConstantsJs* =
-  "window.WATERWORLD_WIRE={speeds:" & jsIntArray(PlaybackSpeeds) &
+  # 0.5 is the replay-only half speed (ReplayHalfSpeedIndex, command '5'); it
+  # rides ahead of the engine's integer PlaybackSpeeds rather than joining them,
+  # because the live loop only ever runs at an integer speed.
+  "window.WATERWORLD_WIRE={speeds:[0.5," & jsIntArray(PlaybackSpeeds)[1..^1] &
   ",fps:" & $TargetFps &
   ",chromeSpriteId:" & $BroadcastChromeSpriteId &
   ",boardW:" & $(MapWidth * RenderScale) &

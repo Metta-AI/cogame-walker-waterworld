@@ -84,7 +84,7 @@ block twoNameSpaces:
     check("the seat is told its own ANONYMOUS alias",
       skimmerAlias(sim.skimmerForSeat(seat)) in message)
   # The chrome, by contrast, MUST carry them.
-  let state = parseJson(sim.buildStateJson(newJArray(), true, 1, 720, false,
+  let state = parseJson(sim.buildStateJson(newJArray(), true, 1.0, 720, false,
     true, -1))
   var namesInChrome = 0
   for row in state{"roster"}:
@@ -108,7 +108,7 @@ block twoNameSpaces:
 block chromeFrameShape:
   var sim = seatedSim()
   discard sim.runScripted(blShoal, ticks = 200)
-  let state = parseJson(sim.buildStateJson(newJArray(), true, 2, 720, true,
+  let state = parseJson(sim.buildStateJson(newJArray(), true, 2.0, 720, true,
     true, -1))
   for key in ["t", "mt", "ph", "lob", "pl", "sp", "mx", "st", "lp", "sk", "ff",
       "en", "mm", "bs", "pov", "teams", "roster", "events", "ww"]:
@@ -127,16 +127,21 @@ block chromeFrameShape:
     state{"ww"}{"reward"}.hasKey("score"))
 
 block wireConstants:
-  ## chrome_common.js is inherited BYTE FOR BYTE and reads window.CTF_WIRE, so it
-  ## runs on its documented fallbacks. Those fallbacks must equal the engine.
+  ## chrome_common.js still reads window.CTF_WIRE (it is the starter's file plus
+  ## the replay-transport patch), so it runs on its documented fallbacks. Those
+  ## fallbacks must equal the engine: the integer PlaybackSpeeds, with the
+  ## replay-only 0.5 (command '5') ahead of them.
   check("the wire block declares WATERWORLD_WIRE",
     WireConstantsJs.startsWith("window.WATERWORLD_WIRE={"), WireConstantsJs)
-  check("it carries the playback speeds", "[1,2,3,4,8,16]" in WireConstantsJs)
+  check("it carries the playback speeds behind the 1/2x replay speed",
+    "speeds:[0.5,1,2,3,4,8,16]" in WireConstantsJs, WireConstantsJs)
   check("it carries the fps", "fps:24" in WireConstantsJs)
   check("it carries the chrome sprite id", "chromeSpriteId:4090" in WireConstantsJs)
   let chrome = readRepoFile("client/chrome_common.js")
-  check("chrome_common's speed fallback equals PlaybackSpeeds",
-    "SPEEDS = WIRE.speeds || [1, 2, 3, 4, 8, 16]" in chrome)
+  check("chrome_common's speed fallback equals the wire block's speeds",
+    "SPEEDS = WIRE.speeds || [0.5, 1, 2, 3, 4, 8, 16]" in chrome)
+  check("chrome_common maps the 1/2x chip onto command '5'",
+    "map = { 0.5: '5', 1: '1'" in chrome)
   check("chrome_common's fps fallback equals ReplayFps",
     "FPS = WIRE.fps || 24" in chrome)
   check("the splice marker survives in the served page",
