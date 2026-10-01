@@ -46,11 +46,8 @@ block gameBlock:
 block secretNamespaceEqualsGameName:
   ## The namespace must equal game.name EXACTLY: upload 400s otherwise and
   ## certify cannot see it.
-  let uri = game{"runnable"}{"env"}{"ANTHROPIC_API_KEY_URI"}.getStr()
-  check("the game runnable receives the anthropic secret", uri.len > 0)
-  check("the secret namespace equals game.name",
-    uri == "secret://coworld/" & game{"name"}.getStr() & "/anthropic_api_key",
-    uri)
+  doAssert game{"runnable"}{"env"}{"ANTHROPIC_API_KEY_URI"}.isNil,
+    "hosted LLM uses the platform sidecar without provider secrets"
 
 block composeDerivation:
   let compose = readRepoFile("compose.yaml")
