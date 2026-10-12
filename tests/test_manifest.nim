@@ -56,8 +56,8 @@ block composeDerivation:
   check("the compose image is coworld-walker-waterworld:latest",
     "image: coworld-walker-waterworld:latest" in compose)
   check("the platform is pinned", "platform: linux/amd64" in compose)
-  check("the build context and network are declared",
-    "context: ." in compose and "network: host" in compose)
+  check("the build needs no host network entitlement",
+    "context: ." in compose and "network: host" notin compose)
   # The placeholder IS the service name, uppercased with '-' -> '_'.
   let derived = "{{" & "walker-waterworld".toUpperAscii().replace("-", "_") &
     "_IMAGE}}"
