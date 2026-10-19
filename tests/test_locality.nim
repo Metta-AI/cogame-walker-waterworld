@@ -1,6 +1,7 @@
 ## The sensor-locality invariant: what a seat can see, and — much more
 ## importantly — everything it cannot.
 
+import waterworld/prompts
 import std/[json, random, strutils]
 
 import helpers
@@ -13,7 +14,7 @@ proc check(name: string, ok: bool, detail = "") =
     echo "FAIL ", name, (if detail.len > 0: ": " & detail else: "")
 
 var tank = seatedSim()
-var engine = initDecisionEngine(tank)
+var engine = initDecisionEngine(tank, PromptSelection())
 for seat in 0 ..< SkimmerCount:
   engine.seats[seat].isLlm = true
   engine.seats[seat].prompt = "operator guidance for seat " & $seat

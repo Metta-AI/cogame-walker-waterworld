@@ -2,6 +2,7 @@
 ## LLM client with no credentials disables itself, which is exactly the path a
 ## test can drive and exactly the path certification takes.
 
+import waterworld/prompts
 import std/[atomics, json, monotimes, net, os, strutils, times]
 
 import mummy
@@ -46,7 +47,7 @@ block oneParallelBatchPerTurn:
   ## batch is built from and `batchBodies` is the bodies it carries, so a length
   ## of four here IS "seats are never queried sequentially".
   var sim = seatedSim()
-  var engine = initDecisionEngine(sim)
+  var engine = initDecisionEngine(sim, PromptSelection())
   engine.client.disabled = false     ## pretend credentials, no call is made
   for seat in 0 ..< SkimmerCount:
     engine.seats[seat].isLlm = true
@@ -65,7 +66,7 @@ block oneParallelBatchPerTurn:
 
 block noCredentialsFallsBackInstantly:
   var sim = seatedSim()
-  var engine = initDecisionEngine(sim)
+  var engine = initDecisionEngine(sim, PromptSelection())
   for seat in 0 ..< SkimmerCount:
     engine.seats[seat].isLlm = true
     engine.seats[seat].prompt = "guidance"
@@ -90,7 +91,7 @@ block noCredentialsFallsBackInstantly:
 
 block scriptedSeatsGetNoFallbackRecord:
   var sim = seatedSim()
-  var engine = initDecisionEngine(sim)
+  var engine = initDecisionEngine(sim, PromptSelection())
   let records = engine.turn(sim, sim.framesFor(), 0, 0)
   check("a seat that registered as SCRIPTED writes no fallback record",
     records.len == 0, $records.len)
@@ -104,7 +105,7 @@ block budgetGuard:
   ## the LLM goes off for the rest of the episode and the run finishes on the
   ## scripted layer, so the episode ends complete/* rather than deadline.
   var sim = seatedSim()
-  var engine = initDecisionEngine(sim)
+  var engine = initDecisionEngine(sim, PromptSelection())
   for seat in 0 ..< SkimmerCount:
     engine.seats[seat].isLlm = true
     engine.seats[seat].prompt = "guidance"
@@ -127,7 +128,7 @@ block interBatchFloor:
   ## consecutive batches cannot start closer than that.
   var sim = seatedSim()
   sim.config.turnSpacingMs = 300
-  var engine = initDecisionEngine(sim)
+  var engine = initDecisionEngine(sim, PromptSelection())
   engine.client.disabled = false
   engine.client.transport = ltAnthropic
   for seat in 0 ..< SkimmerCount:
@@ -284,7 +285,7 @@ block fakeProviderDrivesTheEngine:
   sim.config.attempt1Ms = 2000
   sim.config.retryMs = 2000
   sim.config.turnBudgetMs = 9000
-  var engine = initDecisionEngine(sim)
+  var engine = initDecisionEngine(sim, PromptSelection())
   putEnv("AWS_ENDPOINT_URL_BEDROCK_RUNTIME", "")
   putEnv("AWS_BEARER_TOKEN_BEDROCK", "")
   check("the fake client took the bedrock transport",

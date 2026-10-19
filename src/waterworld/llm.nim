@@ -25,7 +25,7 @@ import std/[json, os, strutils]
 import bitworld/runtime
 import curly
 
-import sim_types, intents
+import sim_types, intents, prompts
 
 const
   AnthropicUrl = "https://api.anthropic.com/v1/messages"
@@ -212,9 +212,8 @@ proc textOf*(
     raise newException(LlmError, "reply cut off at max_tokens before any " &
       "JSON: " & result.truncateRunes(160).replace("\n", " "))
 
-const SystemPrompt* = """
-You are ONE of four thruster drones ("skimmers") in a shallow tank seen from
-above. The tank is 12.00 m wide and 8.00 m tall. Coordinates are metres from
+const Rules = """
+The tank is 12.00 m wide and 8.00 m tall. Coordinates are metres from
 the bottom-left corner; x runs right, y runs up. Bearings are degrees
 counter-clockwise from east: 0 = right, 90 = up, 180 = left, 270 = down.
 There is one round rock of radius 0.90 m dead centre at (6.00, 4.00).
@@ -259,6 +258,9 @@ Schema:
  "throttle":0.0..1.0,               // fraction of full speed you ask for
  "say":"<=48 chars"}                // spectators only; no skimmer ever sees it
 """
+
+proc systemPrompt*(selection: PromptSelection): string =
+  selection.introduction() & Rules
 
 proc operatorBlock*(prompt: string): string =
   ## The seat's own PLAYER_PROMPT, under a heading that tells the model how much

@@ -2,6 +2,7 @@
 ## the artifact writes. Everything here is exercised through the same functions
 ## the running server calls.
 
+import waterworld/prompts
 import std/[json, os, strutils]
 
 import helpers
@@ -69,7 +70,7 @@ block twoNameSpaces:
   for seat in 0 ..< SkimmerCount:
     sim.seatNames[seat] = "SECRET-POLICY-" & $seat
     sim.seatPolicyKind[seat] = "llm"
-  var engine = initDecisionEngine(sim)
+  var engine = initDecisionEngine(sim, PromptSelection())
   for seat in 0 ..< SkimmerCount:
     engine.seats[seat].isLlm = true
     engine.seats[seat].prompt = "guidance"

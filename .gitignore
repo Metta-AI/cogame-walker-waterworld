@@ -9,3 +9,8 @@ walker-waterworld
 walker-waterworld-player
 tests/test_*
 !tests/test_*.nim
+
+# Private candidate and host evidence.
+training-corpus/
+private-trajectories/
+posttrain-output/

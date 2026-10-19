@@ -3,3 +3,8 @@ dist
 replay-viewer/dist
 nim.cfg
 nimcache
+
+# Private candidate and host evidence.
+training-corpus/
+private-trajectories/
+posttrain-output/
