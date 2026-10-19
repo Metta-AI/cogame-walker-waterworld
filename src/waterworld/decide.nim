@@ -41,9 +41,6 @@ type
 
   DecisionEngine* = object
     selection*: PromptSelection
-    capture*: bool
-    attempts*: array[SkimmerCount, seq[JsonNode]]
-    selectedAttemptIds*: array[SkimmerCount, string]
     client*: LlmClient
     ctl*: ControlState
     seats*: seq[SeatPolicy]
@@ -56,7 +53,6 @@ type
 
 proc initDecisionEngine*(sim: SimServer, selection: PromptSelection): DecisionEngine =
   result.selection = selection
-  result.capture = getEnv("WATERWORLD_HOST_TRACE_PATH").len > 0
   result.client = newLlmClient(sim.config)
   result.ctl = initControlState()
   result.seats = newSeq[SeatPolicy](SkimmerCount)
@@ -325,9 +321,6 @@ proc turn*(
   ## Runs ONE decision turn and installs each seat's intent. Returns the replay
   ## chat records this turn produced. NEVER raises: every failure path ends in a
   ## legal intent.
-  for seat in 0 ..< SkimmerCount:
-    engine.attempts[seat] = @[]
-    engine.selectedAttemptIds[seat] = ""
   let budget = initDuration(milliseconds = max(1, sim.config.turnBudgetMs))
   ## The per-turn budget covers the ATTEMPTS, not the inter-batch floor: the
   ## floor is measured start-to-start and is already accounted for separately in
@@ -410,7 +403,7 @@ proc turn*(
         user.add("\n\nYour previous reply was not usable. Reply with ONLY " &
           "the JSON object described above, starting with '{'.")
       let request = engine.client.requestFor(
-        systemPrompt(engine.selection), userMessage(engine.seats[seat].prompt, user), seat)
+        systemPrompt(engine.selection, sim.config.captureTarget), userMessage(engine.seats[seat].prompt, user), seat)
       batch.post(request.url, request.headers, request.body, $seat)
     let started = getMonoTime()
     # curly hands the deadline to CURLOPT_TIMEOUT, whose granularity is WHOLE
@@ -423,17 +416,12 @@ proc turn*(
     var stillOpen: seq[int]
     for position, seat in open:
       var cause = "parse_error"
-      var responseText = ""
-      var failure = ""
-      var accepted = false
-      var parsedAction = newJNull()
-      let attemptId = $turnIndex & "-" & $seat & "-" & $attempt
       try:
-        responseText = engine.client.textOf(
+        let text = engine.client.textOf(
           responses[position].response, responses[position].error,
           batch[position].url)
         var intent = parseIntent(
-          extractJsonObject(responseText),
+          extractJsonObject(text),
           engine.intents[seat],
           engine.haveIntent[seat],
           sim.skimmerForSeat(seat))
@@ -441,11 +429,7 @@ proc turn*(
         intent.latencyMs = int32(latency)
         engine.intents[seat] = intent
         engine.haveIntent[seat] = true
-        parsedAction = engine.intents[seat].intentAction()
-        engine.selectedAttemptIds[seat] = attemptId
-        accepted = true
       except CatchableError as error:
-        failure = error.msg
         if responses[position].error.len > 0:
           cause = (if "timeout" in responses[position].error.toLowerAscii():
                      "timeout" else: "transport_error")
@@ -457,22 +441,6 @@ proc turn*(
         echo "waterworld llm: seat ", seat, " attempt ", attempt + 1,
           " failed, falling back if it fails again: ", error.msg
         stillOpen.add(seat)
-      if engine.capture:
-        let body = parseJson(batch[position].body)
-        let system = body["system"].getStr()
-        let user = body["messages"][0]["content"].getStr()
-        var headers = newJObject()
-        for header in responses[position].response.headers:
-          headers[header[0]] = %header[1]
-        engine.attempts[seat].add(%*{
-          "attempt_id": attemptId,
-          "prompt": [{"role": "system", "content": system}, {"role": "user", "content": user}],
-          "prompt_configuration": engine.selection.promptMetadata(system, user),
-          "request": {"url": batch[position].url, "body": body},
-          "response": responseText, "raw_response": responses[position].response.body,
-          "response_headers": headers, "http_status": responses[position].response.code,
-          "transport_error": responses[position].error, "accepted": accepted,
-          "parsed_action": parsedAction, "failure": failure})
     open = stillOpen
     inc attempt
     if engine.client.throttled and open.len > 0:

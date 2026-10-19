@@ -32,7 +32,7 @@ import bitworld/runtime
 import bitworld/spriteprotocol
 import mummy
 
-import sim_types, sim, roster, intents, control, baselines, decide, llm, prompts, evidence,
+import sim_types, sim, roster, intents, control, baselines, decide, llm, prompts,
   replays, replay_runtime, broadcast, global, events, wire_constants
 
 when defined(posix):
@@ -405,15 +405,8 @@ proc runServerLoop*(
   runtimeConfig = RuntimeConfig()
 ) =
   initAppState()
-  let tracePath = if loadReplayPath.len == 0: getEnv("WATERWORLD_HOST_TRACE_PATH") else: ""
   let selection = promptSelection(
     if runtimeConfig.config.len > 0: parseJson(runtimeConfig.config) else: newJObject())
-  if tracePath.len > 0:
-    let revision = getEnv("WATERWORLD_SOURCE_REVISION")
-    doAssert revision.len > 0, "WATERWORLD_SOURCE_REVISION is required for private capture"
-    writePrivate(tracePath, $(%*{"event_type": "host_start",
-      "source_revision": revision, "seed": initialConfig.seed,
-      "prompt_configuration": selection.selectionMetadata()}) & "\n")
   if saveReplayPath.len > 0 and loadReplayPath.len > 0:
     raise newException(ReplayError, "Cannot save and load a replay together")
   var replayLoaded = loadReplayPath.len > 0
@@ -644,13 +637,6 @@ proc runServerLoop*(
         if sim.gameTicksElapsed() mod turnTicks == 0 and turnIndex != lastTurnIndex:
           lastTurnIndex = turnIndex
           let elapsedSeconds = (getMonoTime() - episodeStart).inSeconds.int
-          var observations: array[SkimmerCount, JsonNode]
-          if tracePath.len > 0:
-            for seat in 0 ..< sim.seatCount():
-              let view = engine.seatViewJson(sim, seat, turnIndex, frames[seat])
-              observations[seat] = parseJson(view)
-              observations[seat]["prompt_template"] = selection.promptMetadata(
-                systemPrompt(selection), userMessage(engine.seats[seat].prompt, view))
           let records = engine.turn(sim, frames, turnIndex, elapsedSeconds)
           for record in records:
             replayWriter.writeChat(tickTime(sim.tickCount), 0, record)
@@ -659,14 +645,6 @@ proc runServerLoop*(
               continue
             let record = engine.intents[seat].boundedIntentRecord(
               turnIndex, seat, sim.skimmerForSeat(seat))
-            if tracePath.len > 0:
-              appendPrivate(tracePath, %*{"event_type": "host_decision", "turn": turnIndex,
-                "tick": sim.gameTicksElapsed(), "seat": seat, "skimmer": sim.skimmerForSeat(seat),
-                "observation": observations[seat], "attempts": engine.attempts[seat],
-                "selected_attempt_id": engine.selectedAttemptIds[seat],
-                "executed_action": engine.intents[seat].intentAction(),
-                "installed_record": engine.intents[seat].intentRecord(turnIndex, seat, sim.skimmerForSeat(seat)),
-                "replay_record": parseJson(record), "action_origin": $engine.intents[seat].source})
             replayWriter.writeChat(tickTime(sim.tickCount), seat, record)
             sim.pushFeedIntent(record)
             sim.emitEvent(Intent, source = seat,
@@ -800,8 +778,6 @@ proc runServerLoop*(
         echo "Events written: ", eventsPath, " (", collectedEvents.len,
           " events)"
       let scoresJson = sim.playerResultsJson() & "\n"
-      if tracePath.len > 0:
-        appendPrivate(tracePath, %*{"event_type": "host_finish", "results": parseJson(scoresJson)})
       if runtimeConfig.resultsUri.len > 0:
         runtimeConfig.writeResults(scoresJson)
       elif saveScoresPath.len > 0:

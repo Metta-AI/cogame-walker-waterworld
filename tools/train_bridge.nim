@@ -129,7 +129,7 @@ proc hostedIntent(candidate: JsonNode): JsonNode =
     "throttle": min(1.0, candidate["throttle255"].getInt().float / 255.0 + 1e-9)}
 
 proc decision(view: JsonNode, seat, id: int, selection: PromptSelection, language: bool): JsonNode =
-  let system = systemPrompt(selection)
+  let system = systemPrompt(selection, view["pod"]["target"].getInt())
   let user = userMessage(OperatorPrompt, $view)
   let semanticView = copy(view)
   semanticView["prompt_template"] = selection.promptMetadata(system, user)

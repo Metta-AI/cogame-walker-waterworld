@@ -228,11 +228,14 @@ YOU FEEL THE WATER WITH 16 SENSORS THAT REACH ONLY 2.40 m. Beyond that you
 cannot see plankton or poison at all. You CAN always see the other three
 skimmers - position, velocity, stun - because the pod shares a transponder.
 You CANNOT talk to anyone and nobody sees anything you write.
-Everyone in the pod gets the SAME score. 20 catches ends the run early and
+Everyone in the pod gets the SAME score. {capture_target} catches ends the run early and
 wins it.
 Every 3 seconds you set your ORDER for the next 3 seconds. A deterministic
 autopilot runs it 24 times a second: it steers, it leads a moving target, it
 backs off poison for you. You choose WHAT to go for and HOW hard.
+"""
+
+const OutputFormat = """
 Reply with a single JSON object and NOTHING else. Your reply MUST begin with '{'.
 Schema:
 {"note":"<=160 chars, your reasoning",
@@ -259,8 +262,8 @@ Schema:
  "say":"<=48 chars"}                // spectators only; no skimmer ever sees it
 """
 
-proc systemPrompt*(selection: PromptSelection): string =
-  selection.introduction() & Rules
+proc systemPrompt*(selection: PromptSelection, captureTarget: int): string =
+  selection.briefing(Rules).replace("{capture_target}", $captureTarget) & OutputFormat
 
 proc operatorBlock*(prompt: string): string =
   ## The seat's own PLAYER_PROMPT, under a heading that tells the model how much

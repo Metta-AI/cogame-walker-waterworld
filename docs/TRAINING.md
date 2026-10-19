@@ -23,11 +23,14 @@ view for an Observatory consumer and a numeric encoding for training.
 
 ## Prompt diversity
 
-The walker-waterworld-rules-v1 bank has five training introductions (canonical,
-plain, numbered, questions, reordered) and two evaluation-only introductions
-(heldout-briefing, heldout-reference). Only the opening description changes.
-Canonical preserves the original bytes. Rules, sensors, scoring, operator guidance,
-simultaneous turns, action parsing, and published budgets remain fixed.
+The walker-waterworld-rules-v2 bank has five training briefings (canonical,
+plain, numbered, questions, reordered) and two evaluation-only briefings
+(heldout-briefing, heldout-reference). They vary the explanation and ordering of
+the setting, rewards, sensing, communication and control loop. The JSON action
+schema stays identical. Canonical preserves the default game's original bytes;
+all wordings take the catch target from configuration (20 default, 14 sprint),
+correcting the original prompt's hard-coded 20. Game mechanics,
+operator guidance, action parsing and published budgets remain fixed.
 
 Runtime config and bridge reset accept promptVariant and promptSeed. Mixed
 selection requires an explicit nonnegative prompt seed and chooses one training
@@ -42,37 +45,26 @@ Invalid local responses fail the bridge; native play retains its ordinary retry
 and fallback behavior. Private semantic views carry prompt_template metadata
 with bank, selection, variant, seed, and exact system/user SHA-256 hashes.
 
-## Complete private candidates
+## Exporting a mixed corpus
 
-Commit source before exporting. Use a fresh output directory outside the checkout.
+The existing exporter writes `train.jsonl`, `validation.jsonl`, and `manifest.json`.
+It accepts optional wording and prompt-seed arguments:
 
 ```sh
 nim c -d:release --path:src -o:/tmp/waterworld-export tools/export_posttrain.nim
-/tmp/waterworld-export /tmp/waterworld-default 10 1 default mixed 4
-/tmp/waterworld-export /tmp/waterworld-sprint 10 1 sprint plain
+/tmp/waterworld-export /tmp/waterworld-default 10 1 default mixed 0
 ```
 
-The optional final arguments select wording and its independent seed. Held-out
-wordings are rejected before output creation. The exporter plays full published
-games, freezes all four views before installing intents, and records exact
-prompts, teacher proposals, installed actions, and all four terminal outcomes.
-Private files use exclusive creation and owner-only permissions.
+Mixed selection advances the independent prompt seed once per complete game.
+Each manifest run records its bank, resolved wording and seed. The existing
+split by game seed stays fixed across wordings; held-out wordings are rejected.
+The exporter continues to produce scripted-teacher examples. These checks do
+not establish improved learned play or resistance to training collapse.
 
-These are candidates, not admitted training rows. Import complete episodes
-through the shared Coworld SDK, obtain independent review, and split by seed
-family before exporting examples. All wordings and both variants for a game seed
-share one family. No train/validation projections are written by this game.
+## Validation
 
-## Private native capture
-
-Set WATERWORLD_HOST_TRACE_PATH and WATERWORLD_SOURCE_REVISION to capture a private
-host trace. It records actual request bodies, responses, status/headers, rejected
-attempts, selected attempts, pre-turn private views, installed fixed-point
-intents, replay records, and final outcomes before results trigger teardown.
-It is separate from public spectator artifacts. Native fixture traffic verifies
-the protocol; it is not real model inference or evidence of better learned play.
-
-Historical smoke studies distilled the scripted shoal teacher into a 4096-token
-model. They do not establish stronger league play or resistance to training
-collapse. Matched model studies and production deployment remain separate from
-deterministic preservation and local runtime checks.
+`tools/test_prompt_games.py BRIDGE --exporter EXPORTER` plays every wording
+through complete default and sprint games, checks fixed action schemas and
+identical scripted outcomes, rejects held-out training requests, and verifies
+mixed corpus export. Existing numeric bridge, native runtime and replay tests
+remain in place. No additional native trace protocol is required.
