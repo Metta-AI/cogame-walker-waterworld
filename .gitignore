@@ -14,3 +14,4 @@ tests/test_*
 training-corpus/
 private-trajectories/
 posttrain-output/
+__pycache__/

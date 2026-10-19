@@ -158,6 +158,16 @@ jobs:
           nim c --parallelBuild:1 -d:release --path:src -o:/tmp/waterworld-export tools/export_posttrain.nim
           python3 tools/test_training_corpus.py /tmp/waterworld-export
 
+      - name: Native prompt and installed-action evidence
+        run: |
+          set -euo pipefail
+          nim c --parallelBuild:1 -d:release --path:src -o:/tmp/waterworld-game src/walker_waterworld.nim
+          nim c --parallelBuild:1 -d:release --path:src -o:/tmp/waterworld-player src/walker_waterworld_player.nim
+          for mode in accepted retry fallback; do
+            python3 tools/test_native_prompts.py /tmp/waterworld-game /tmp/waterworld-player \
+              /tmp/waterworld-native-$mode --wording mixed --mode "$mode"
+          done
+
 
   # ---------------------------------------------------------------------
   # Packaging smoke: the production image builds, and one real episode runs
