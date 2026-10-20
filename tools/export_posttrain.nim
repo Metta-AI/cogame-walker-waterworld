@@ -96,7 +96,7 @@ when isMainModule:
           doAssert parsed.throttle255 == intent.throttle255
           rows.add($(%*{
             "episode_id": "walker-waterworld-" & variant & "-" & $seed & "-" &
-              $selection.selectedVariant & "-" & $selection.seed,
+              $selection.variant & "-" & $selection.selectedVariant & "-" & $selection.seed,
             "seed": "walker-waterworld-" & variant & "-" & $seed,
             "decision_id": turn * SkimmerCount + seat,
             "prompt": [

@@ -56,8 +56,8 @@ nim c -d:release --path:src -o:/tmp/waterworld-export tools/export_posttrain.nim
 ```
 
 Mixed selection cycles independently within training and validation. Fixed
-wordings keep the supplied prompt seed. Episode IDs include the selected
-wording and prompt seed, so matched exports stay distinct.
+wordings keep the supplied prompt seed. Episode IDs include requested selection, resolved
+wording, and prompt seed, so matched exports stay distinct.
 Each manifest run records its bank, resolved wording and seed. The existing
 split by game seed stays fixed across wordings; held-out wordings are rejected.
 The exporter continues to produce scripted-teacher examples. These checks do
