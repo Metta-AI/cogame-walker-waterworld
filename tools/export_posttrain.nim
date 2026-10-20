@@ -38,9 +38,13 @@ when isMainModule:
     trainRows: seq[string]
     validationRows: seq[string]
     runs = newJArray()
+    wordingCounts: array[2, int]
   for seed in firstSeed ..< firstSeed + episodes:
-    let selection = PromptSelection(variant: initialSelection.variant,
-      seed: initialSelection.seed + seed - firstSeed)
+    var selection = initialSelection
+    let splitIndex = ord(seed mod 5 == 0)
+    if selection.variant == pvMixed:
+      selection.seed += wordingCounts[splitIndex]
+      inc wordingCounts[splitIndex]
     var config = defaultGameConfig()
     config.update($variantConfig)
     config.seed = seed
@@ -91,7 +95,8 @@ when isMainModule:
           doAssert parsed.standoffMm == intent.standoffMm
           doAssert parsed.throttle255 == intent.throttle255
           rows.add($(%*{
-            "episode_id": "walker-waterworld-" & variant & "-" & $seed,
+            "episode_id": "walker-waterworld-" & variant & "-" & $seed & "-" &
+              $selection.selectedVariant & "-" & $selection.seed,
             "seed": "walker-waterworld-" & variant & "-" & $seed,
             "decision_id": turn * SkimmerCount + seat,
             "prompt": [

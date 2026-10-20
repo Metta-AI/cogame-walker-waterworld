@@ -156,9 +156,6 @@ def main() -> None:
         )
         manifest = json.loads((destination / "manifest.json").read_text())
         assert len(manifest["runs"]) == 10
-        assert [
-            run["prompt_configuration"]["variant"] for run in manifest["runs"]
-        ] == list(WORDINGS[:5]) * 2
         assert all(
             run["prompt_configuration"]["bank"] == "walker-waterworld-rules-v2"
             for run in manifest["runs"]
@@ -173,6 +170,13 @@ def main() -> None:
             families[split] = {row["seed"] for row in rows}
             assert all(row["completion"][0]["role"] == "assistant" for row in rows)
         assert families["train"].isdisjoint(families["validation"])
+        training_seeds = {int(seed.rsplit("-", 1)[1]) for seed in families["train"]}
+        training_wordings = {
+            run["prompt_configuration"]["variant"]
+            for run in manifest["runs"]
+            if run["seed"] in training_seeds
+        }
+        assert training_wordings == set(WORDINGS[:5]), "training must contain all five wordings"
     print("10 complete export games and disjoint splits PASS", flush=True)
 
 
