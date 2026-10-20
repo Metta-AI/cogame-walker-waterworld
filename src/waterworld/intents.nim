@@ -362,6 +362,19 @@ proc intentRecord*(
     "say": intent.say
   }
 
+proc intentAction*(intent: SkimmerIntent): JsonNode =
+  ## A language action that round-trips the installed fixed-point intent.
+  %*{"mode": $intent.mode,
+    "target": (if intent.target >= 0: foodId(int(intent.target)) else: "none"),
+    "partner": (if intent.partner >= 0: skimmerAlias(int(intent.partner)) else: "none"),
+    "waypoint": [
+      (float(intent.waypointXUm) + 0.5) / 1_000_000.0,
+      (float(ArenaH - intent.waypointYUm) - 0.5) / 1_000_000.0],
+    "lead_ticks": int(intent.leadTicks),
+    "standoff_m": float(intent.standoffMm) / 1000.0 + 1e-9,
+    "throttle": min(1.0, float(intent.throttle255) / 255.0 + 1e-9),
+    "say": intent.say, "note": intent.note}
+
 proc boundedIntentRecord*(
   intent: SkimmerIntent, turn, seat, skimmer: int
 ): string =

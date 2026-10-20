@@ -30,6 +30,6 @@ WHAT WINS
 
 A catch needs TWO skimmers on one plankton in the SAME TICK. One skimmer alone on plankton earns +0.05 once and then nothing until it has moved 0.60 m away — sitting on food alone is not a strategy, it is a signal. So the whole game is rendezvous: sense something, decide who else can reach it in three seconds, and be there at the same moment as somebody who cannot hear you. `escort` exists precisely for that: it converges two skimmers to a point 0.80 m apart and then, the instant either of them smells plankton near the other, sends both to the plankton.
 
-Poison costs -2 and half a second of no thrust. -2 is twenty nibbles; it is worth a wide standoff when you are not closing on anything. Thrust is small but real: 6.912 points if you hold full throttle for the whole run, which is most of a catch.
+Poison costs -2 and half a second of no thrust. -2 is forty nibbles; it is worth a wide standoff when you are not closing on anything. Thrust is small but real: 6.912 points if you hold full throttle for the whole run, which is most of a catch.
 
 EVERYONE GETS THE SAME SCORE, including the two seats you did not choose and cannot talk to. The ladder ranks you by the mean of those shared scores, so a policy that only works alongside its own twin is exactly the policy the cross-play mean exposes.

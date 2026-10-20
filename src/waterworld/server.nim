@@ -32,7 +32,7 @@ import bitworld/runtime
 import bitworld/spriteprotocol
 import mummy
 
-import sim_types, sim, roster, intents, control, baselines, decide, llm,
+import sim_types, sim, roster, intents, control, baselines, decide, llm, prompts,
   replays, replay_runtime, broadcast, global, events, wire_constants
 
 when defined(posix):
@@ -405,6 +405,8 @@ proc runServerLoop*(
   runtimeConfig = RuntimeConfig()
 ) =
   initAppState()
+  let selection = promptSelection(
+    if runtimeConfig.config.len > 0: parseJson(runtimeConfig.config) else: newJObject())
   if saveReplayPath.len > 0 and loadReplayPath.len > 0:
     raise newException(ReplayError, "Cannot save and load a replay together")
   var replayLoaded = loadReplayPath.len > 0
@@ -470,7 +472,7 @@ proc runServerLoop*(
   httpServer.waitUntilReady()
 
   var
-    engine = if replayLoaded: DecisionEngine() else: initDecisionEngine(sim)
+    engine = if replayLoaded: DecisionEngine() else: initDecisionEngine(sim, selection)
     lastTick = getMonoTime()
     episodeStart = getMonoTime()
     deadlineHit = false

@@ -1,19 +1,25 @@
 ## Export complete scripted Waterworld games as Metta post-training examples.
-## Usage: nim r --path:src tools/export_posttrain.nim OUTPUT EPISODES [FIRST_SEED] [default|sprint]
+## Usage: nim r --path:src tools/export_posttrain.nim OUTPUT EPISODES [FIRST_SEED] [default|sprint] [PROMPT_VARIANT] [PROMPT_SEED]
 
 import std/[json, os, osproc, strutils]
-import waterworld/[sim, roster, sensors, intents, control, baselines, decide, llm]
+import waterworld/[sim, roster, sensors, intents, control, baselines, decide, llm, prompts]
 
 const OperatorPrompt = "Coordinate the pod using only your own skimmer's sensor frame."
 
 when isMainModule:
   let args = commandLineParams()
-  if args.len notin 2 .. 4:
-    quit("usage: export_posttrain OUTPUT EPISODES [FIRST_SEED] [default|sprint]", 1)
+  if args.len notin 2 .. 6:
+    quit("usage: export_posttrain OUTPUT EPISODES [FIRST_SEED] [default|sprint] [PROMPT_VARIANT] [PROMPT_SEED]", 1)
+  var promptConfig = newJObject()
+  if args.len >= 5: promptConfig["promptVariant"] = %args[4]
+  if args.len >= 6: promptConfig["promptSeed"] = %parseInt(args[5])
+  let initialSelection = promptSelection(promptConfig)
+  if initialSelection.selectedVariant in {pvHeldoutBriefing, pvHeldoutReference}:
+    quit("held-out wording cannot enter training sources", 1)
   let output = args[0]
   let episodes = parseInt(args[1])
   let firstSeed = if args.len >= 3: parseInt(args[2]) else: 1
-  let variant = if args.len == 4: args[3] else: "default"
+  let variant = if args.len >= 4: args[3] else: "default"
   if episodes < 10 or firstSeed < 1:
     quit("at least ten episodes and a positive first seed are required", 1)
   if variant notin ["default", "sprint"]:
@@ -32,7 +38,13 @@ when isMainModule:
     trainRows: seq[string]
     validationRows: seq[string]
     runs = newJArray()
+    wordingCounts: array[2, int]
   for seed in firstSeed ..< firstSeed + episodes:
+    var selection = initialSelection
+    let splitIndex = ord(seed mod 5 == 0)
+    if selection.variant == pvMixed:
+      selection.seed += wordingCounts[splitIndex]
+      inc wordingCounts[splitIndex]
     var config = defaultGameConfig()
     config.update($variantConfig)
     config.seed = seed
@@ -43,7 +55,7 @@ when isMainModule:
     while sim.phase != Playing:
       sim.step(empty)
     var
-      engine = initDecisionEngine(sim)
+      engine = initDecisionEngine(sim, selection)
       rows: seq[string]
     while sim.phase != GameOver:
       let turn = sim.gameTicksElapsed() div config.turnTicks
@@ -83,11 +95,12 @@ when isMainModule:
           doAssert parsed.standoffMm == intent.standoffMm
           doAssert parsed.throttle255 == intent.throttle255
           rows.add($(%*{
-            "episode_id": "walker-waterworld-" & variant & "-" & $seed,
+            "episode_id": "walker-waterworld-" & variant & "-" & $seed & "-" &
+              $selection.variant & "-" & $selection.selectedVariant & "-" & $selection.seed,
             "seed": "walker-waterworld-" & variant & "-" & $seed,
             "decision_id": turn * SkimmerCount + seat,
             "prompt": [
-              {"role": "system", "content": SystemPrompt},
+              {"role": "system", "content": systemPrompt(selection, config.captureTarget)},
               {"role": "user", "content": userMessage(OperatorPrompt, views[seat])}
             ],
             "completion": [{"role": "assistant", "content": $completion}],
@@ -108,7 +121,7 @@ when isMainModule:
       validationRows.add(rows)
     else:
       trainRows.add(rows)
-    runs.add(%*{"seed": seed, "decisions": rows.len,
+    runs.add(%*{"seed": seed, "prompt_configuration": selection.selectionMetadata(), "decisions": rows.len,
       "score": outcome["sharedScore"], "win": outcome["win"][0]})
   writeFile(output / "train.jsonl", trainRows.join("\n") & "\n")
   writeFile(output / "validation.jsonl", validationRows.join("\n") & "\n")

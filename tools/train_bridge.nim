@@ -2,7 +2,7 @@
 ## nim c -d:release --path:src -o:waterworld-train-bridge tools/train_bridge.nim
 
 import std/[json, os, posix, strutils]
-import waterworld/[sim, roster, sensors, intents, control, baselines, decide, llm]
+import waterworld/[sim, roster, sensors, intents, control, baselines, decide, llm, prompts]
 
 const
   OperatorPrompt = "Coordinate the pod using only your own skimmer's sensor frame."
@@ -128,25 +128,36 @@ proc hostedIntent(candidate: JsonNode): JsonNode =
     "standoff_m": candidate["standoff_cm"].getInt().float / 100.0 + 1e-9,
     "throttle": min(1.0, candidate["throttle255"].getInt().float / 255.0 + 1e-9)}
 
-proc decision(view: JsonNode, seat, id: int): JsonNode =
+proc decision(view: JsonNode, seat, id: int, selection: PromptSelection, language: bool): JsonNode =
+  let system = systemPrompt(selection, view["pod"]["target"].getInt())
+  let user = userMessage(OperatorPrompt, $view)
+  let semanticView = copy(view)
+  semanticView["prompt_template"] = selection.promptMetadata(system, user)
   var properties = newJObject()
   var required = newJArray()
   for head in heads():
     let name = head["name"].getStr()
     properties[name] = %*{"enum": head["choices"]}
     required.add(%name)
+  let schema = if language: %*{"type": "object", "properties": {
+    "mode": {"enum": Modes}, "target": {"type": "string"}, "partner": {"type": "string"},
+    "waypoint": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2},
+    "lead_ticks": {"type": "integer"}, "standoff_m": {"type": "number"},
+    "throttle": {"type": "number"}, "note": {"type": "string"}, "say": {"type": "string"}}}
+    else: %*{"type": "object", "properties": properties, "required": required}
   %*{"kind": "decision", "game": "walker-waterworld", "decision_id": id,
     "seat": seat, "engine_seat": seat, "turn": view["turn"],
-    "semantic_view": view, "inbox": [],
-    "messages": [{"role": "system", "content": SystemPrompt},
-      {"role": "user", "content": userMessage(OperatorPrompt, $view)}],
+    "semantic_view": semanticView, "inbox": [],
+    "messages": [{"role": "system", "content": system},
+      {"role": "user", "content": user}],
     "speech_messages": [],
-    "action_schema": {"type": "object", "properties": properties,
-      "required": required}, "typed_question": newJNull()}
+    "action_schema": schema, "typed_question": newJNull()}
 
 when isMainModule:
   let args = commandLineParams()
-  if args.len != 2: quit("usage: waterworld-train-bridge MANIFEST VARIANT", 1)
+  if args.len notin 2 .. 3: quit("usage: waterworld-train-bridge MANIFEST VARIANT [--language]", 1)
+  let language = args.len == 3
+  if language: doAssert args[2] == "--language"
   let variant = args[1]
   doAssert variant in Variants
   let manifest = parseFile(args[0])
@@ -154,6 +165,7 @@ when isMainModule:
   for entry in manifest["variants"]:
     if entry["id"].getStr() == variant: variantConfig = entry["game_config"]
   doAssert not variantConfig.isNil
+  var selection: PromptSelection
   var game: SimServer
   var engine: DecisionEngine
   var views: array[SkimmerCount, JsonNode]
@@ -168,6 +180,10 @@ when isMainModule:
     case request["kind"].getStr()
     of "reset":
       doAssert request["players"].getInt() == SkimmerCount
+      selection = promptSelection(request)
+      if selection.selectedVariant in {pvHeldoutBriefing, pvHeldoutReference} and
+          (not request.hasKey("split") or request["split"].getStr() != "validation"):
+        raise newException(ValueError, "held-out wording cannot enter training")
       var config = defaultGameConfig()
       config.update($variantConfig)
       config.seed = seedOf(request["seed"].getStr())
@@ -176,7 +192,7 @@ when isMainModule:
         discard game.addPlayer("policy-" & $actor, actor, "", trusted = true)
       var idle: array[SkimmerCount, uint8]
       while game.phase != Playing: game.step(idle)
-      engine = DecisionEngine(ctl: initControlState(),
+      engine = DecisionEngine(selection: selection, ctl: initControlState(),
         seats: newSeq[SeatPolicy](SkimmerCount),
         intents: newSeq[SkimmerIntent](SkimmerCount),
         haveIntent: newSeq[bool](SkimmerCount))
@@ -187,7 +203,7 @@ when isMainModule:
           game.frameFor(game.skimmerForSeat(actor))))
       seat = 0
       id = 0
-      response = views[seat].decision(seat, id)
+      response = views[seat].decision(seat, id, selection, language)
     of "encode":
       doAssert game.phase != GameOver
       response = %*{"decision_id": id,
@@ -195,21 +211,24 @@ when isMainModule:
     of "teacher":
       doAssert game.phase != GameOver
       let skimmer = game.skimmerForSeat(seat)
-      response = %*{"response": $action(scriptedIntent(game, blShoal,
-        skimmer, game.frameFor(skimmer), turn))}
+      let teacher = scriptedIntent(game, blShoal, skimmer, game.frameFor(skimmer), turn)
+      response = %*{"response": $(if language: teacher.intentAction() else: action(teacher))}
     of "step":
       doAssert game.phase != GameOver and request["decision_id"].getInt() == id
-      let candidate = parseJson(request["response"].getStr())
-      for head in heads():
-        doAssert candidate[head["name"].getStr()] in head["choices"]
-      engine.intents[seat] = parseIntent(candidate.hostedIntent(),
+      let candidate = if language: extractJsonObject(request["response"].getStr())
+        else: parseJson(request["response"].getStr())
+      if not language:
+        for head in heads():
+          doAssert candidate[head["name"].getStr()] in head["choices"]
+      engine.intents[seat] = parseIntent(if language: candidate else: candidate.hostedIntent(),
         engine.intents[seat], engine.haveIntent[seat], game.skimmerForSeat(seat))
       engine.haveIntent[seat] = true
+      let executed = if language: engine.intents[seat].intentAction() else: candidate
       inc id
       inc seat
       var observation: JsonNode
       if seat < SkimmerCount:
-        observation = views[seat].decision(seat, id)
+        observation = views[seat].decision(seat, id, selection, language)
       else:
         while game.phase != GameOver:
           var frames: array[SkimmerCount, SensorFrame]
@@ -238,8 +257,8 @@ when isMainModule:
           for actor in 0 ..< SkimmerCount:
             views[actor] = parseJson(engine.seatViewJson(game, actor, turn,
               game.frameFor(game.skimmerForSeat(actor))))
-          observation = views[seat].decision(seat, id)
-      response = %*{"kind": "accepted", "action": candidate,
+          observation = views[seat].decision(seat, id, selection, language)
+      response = %*{"kind": "accepted", "action": executed,
         "observation": observation}
     else:
       raise newException(ValueError, "unknown command: " & request["kind"].getStr())

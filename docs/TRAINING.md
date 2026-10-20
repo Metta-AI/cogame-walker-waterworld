@@ -21,38 +21,52 @@ default]` or replace `default` with `sprint`, and set `players=4`. Always set
 a finite timestep limit. The JSONL protocol exposes the production player
 view for an Observatory consumer and a numeric encoding for training.
 
-## Metta post-training data
+## Prompt diversity
 
-The native simulator and published `shoal` policy can export supervised
-examples for both certified variants:
+The walker-waterworld-rules-v2 bank has five training briefings (canonical,
+plain, numbered, questions, reordered) and two evaluation-only briefings
+(heldout-briefing, heldout-reference). They vary the explanation and ordering of
+the setting, rewards, sensing, communication and control loop. The JSON action
+schema stays identical. Canonical preserves the default game's original bytes;
+all wordings take the catch target from configuration (20 default, 14 sprint),
+correcting the original prompt's hard-coded 20. Game mechanics,
+operator guidance, action parsing and published budgets remain fixed.
+
+Runtime config and bridge reset accept promptVariant and promptSeed. Mixed
+selection requires an explicit nonnegative prompt seed and chooses one training
+wording by modulo five. Selection remains fixed across all seats and turns,
+outside simulation randomness and replay hashes. The default is canonical.
+Held-out bridge selection requires split=validation.
+
+Add --language to the bridge command to use native JSON extraction and tolerant
+intent parsing. Responses report the installed fixed-point intent as a round-trip
+language action. Spectator-only note/say fields never enter player observations.
+Invalid local responses fail the bridge; native play retains its ordinary retry
+and fallback behavior. Private semantic views carry prompt_template metadata
+with bank, selection, variant, seed, and exact system/user SHA-256 hashes.
+
+## Exporting a mixed corpus
+
+The existing exporter writes `train.jsonl`, `validation.jsonl`, and `manifest.json`.
+It accepts optional wording and prompt-seed arguments:
 
 ```sh
-nimby sync nimby.lock
-nim r -d:release --path:src tools/export_posttrain.nim \
-  /tmp/waterworld-default 10 1 default
-nim r -d:release --path:src tools/export_posttrain.nim \
-  /tmp/waterworld-sprint 10 1 sprint
+nim c -d:release --path:src -o:/tmp/waterworld-export tools/export_posttrain.nim
+/tmp/waterworld-export /tmp/waterworld-default 10 1 default mixed 0
 ```
 
-Each run uses its published variant config and plays complete seeded,
-four-seat games. The exporter records the hosted system prompt, each seat's
-sensor-limited observation, and a baseline intent that round-trips through
-the game's reply parser. Splits are by game seed. The manifest records source
-revision, variant, scores, wins, and row counts. Existing output directories
-are never overwritten.
+Mixed selection cycles independently within training and validation. Fixed
+wordings keep the supplied prompt seed. Episode IDs include requested selection, resolved
+wording, and prompt seed, so matched exports stay distinct.
+Each manifest run records its bank, resolved wording and seed. The existing
+split by game seed stays fixed across wordings; held-out wordings are rejected.
+The exporter continues to produce scripted-teacher examples. These checks do
+not establish improved learned play or resistance to training collapse.
 
-Train either output with Metta post-training:
+## Validation
 
-```sh
-nix develop -c uv run --package metta-posttrain --extra train \
-  python -m metta_posttrain.train --dataset /tmp/waterworld-default \
-  --output /tmp/waterworld-adapter --model Qwen/Qwen3-0.6B \
-  --max-steps 100 --max-length 4096
-```
-
-The local 10-game default export contained 656 train and 184 validation
-examples, with 7/10 wins. Sprint contained 440 train and 128 validation
-examples, with 6/10 wins. All 1,408 examples fit a 4096-token smoke model.
-One CPU optimizer update reduced validation loss from 1.7444 to 1.7381 on
-both variants. This distills a scripted teacher; it does not establish
-stronger league play.
+`tools/test_prompt_games.py BRIDGE --exporter EXPORTER` plays every wording
+through complete default and sprint games, checks fixed action schemas and
+identical scripted outcomes, rejects held-out training requests, and verifies
+mixed corpus export. Existing numeric bridge, native runtime and replay tests
+remain in place. No additional native trace protocol is required.
