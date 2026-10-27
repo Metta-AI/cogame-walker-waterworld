@@ -32,7 +32,7 @@ import bitworld/runtime
 import bitworld/spriteprotocol
 import mummy
 
-import sim_types, sim, roster, intents, control, baselines, decide, llm, prompts,
+import sim_types, sim, roster, intents, control, baselines, decide, capture, llm, prompts,
   replays, replay_runtime, broadcast, global, events, wire_constants
 
 when defined(posix):
@@ -783,6 +783,7 @@ proc runServerLoop*(
       elif saveScoresPath.len > 0:
         writeFile(saveScoresPath, scoresJson)
       echo "results: ", scoresJson
+      engine.trajectory.finishCapture(parseJson(sim.playerResultsJson()))
       ## EDIT 5: bounded shutdown grace. The certification runner pings
       ## /healthz and /global AFTER the player pods start, and a short episode
       ## can already have written its artifacts by then. Keep answering for a

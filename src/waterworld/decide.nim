@@ -27,7 +27,7 @@ import std/[json, math, monotimes, os, strutils, times]
 
 import curly
 
-import sim_types, sim, roster, intents, baselines, control, llm, prompts
+import sim_types, sim, roster, intents, baselines, control, llm, prompts, capture
 
 type
   SeatPolicy* = object
@@ -40,6 +40,7 @@ type
     registered*: bool
 
   DecisionEngine* = object
+    trajectory*: DecisionTrajectory
     selection*: PromptSelection
     client*: LlmClient
     ctl*: ControlState
@@ -52,6 +53,7 @@ type
     records*: seq[string]    ## chat records queued for the replay writer
 
 proc initDecisionEngine*(sim: SimServer, selection: PromptSelection): DecisionEngine =
+  result.trajectory = beginCapture("walker-waterworld", "walker-waterworld-" & $sim.config.seed)
   result.selection = selection
   result.client = newLlmClient(sim.config)
   result.ctl = initControlState()
@@ -321,6 +323,9 @@ proc turn*(
   ## Runs ONE decision turn and installs each seat's intent. Returns the replay
   ## chat records this turn produced. NEVER raises: every failure path ends in a
   ## legal intent.
+  var observations: seq[JsonNode]
+  for seat in 0 ..< sim.seatCount():
+    observations.add(parseJson(engine.seatViewJson(sim, seat, turnIndex, frames[seat])))
   let budget = initDuration(milliseconds = max(1, sim.config.turnBudgetMs))
   ## The per-turn budget covers the ATTEMPTS, not the inter-batch floor: the
   ## floor is measured start-to-start and is already accounted for separately in
@@ -384,6 +389,7 @@ proc turn*(
   # that had just slept out a full spacing would otherwise skip its own retry.
   turnStart = getMonoTime()
 
+  var attempts = newSeq[seq[DecisionAttempt]](SkimmerCount)
   # --- up to two PARALLEL batches -----------------------------------------
   var attempt = 0
   while open.len > 0 and attempt < 2:
@@ -397,6 +403,7 @@ proc turn*(
     let deadlineMs =
       if attempt == 0: sim.config.attempt1Ms else: sim.config.retryMs
     var batch: RequestBatch
+    var evidence: seq[DecisionAttempt]
     for position, seat in open:
       var user = engine.seatViewJson(sim, seat, turnIndex, frames[seat])
       if attempt > 0:
@@ -404,6 +411,9 @@ proc turn*(
           "the JSON object described above, starting with '{'.")
       let request = engine.client.requestFor(
         systemPrompt(engine.selection, sim.config.captureTarget), userMessage(engine.seats[seat].prompt, user), seat)
+      evidence.add(requestEvidence($turnIndex & "-" & $seat & "-" & $attempt,
+        engine.seats[seat].label, systemPrompt(engine.selection, sim.config.captureTarget),
+        userMessage(engine.seats[seat].prompt, user), request.body))
       batch.post(request.url, request.headers, request.body, $seat)
     let started = getMonoTime()
     # curly hands the deadline to CURLOPT_TIMEOUT, whose granularity is WHOLE
@@ -416,10 +426,14 @@ proc turn*(
     var stillOpen: seq[int]
     for position, seat in open:
       var cause = "parse_error"
+      var receipt = evidence[position]
+      receipt.latencyMs = some(float(latency))
+      receipt.receivedEvidence(responses[position].response)
       try:
         let text = engine.client.textOf(
           responses[position].response, responses[position].error,
           batch[position].url)
+        receipt.response = %text
         var intent = parseIntent(
           extractJsonObject(text),
           engine.intents[seat],
@@ -429,7 +443,9 @@ proc turn*(
         intent.latencyMs = int32(latency)
         engine.intents[seat] = intent
         engine.haveIntent[seat] = true
+        receipt.accepted = true
       except CatchableError as error:
+        receipt.rejectionReason = some(error.msg)
         if responses[position].error.len > 0:
           cause = (if "timeout" in responses[position].error.toLowerAscii():
                      "timeout" else: "transport_error")
@@ -441,6 +457,7 @@ proc turn*(
         echo "waterworld llm: seat ", seat, " attempt ", attempt + 1,
           " failed, falling back if it fails again: ", error.msg
         stillOpen.add(seat)
+      attempts[seat].add(receipt)
     open = stillOpen
     inc attempt
     if engine.client.throttled and open.len > 0:
@@ -471,6 +488,31 @@ proc turn*(
     ## "falling back" is the phrase phase 60 greps the GAME log for.
     echo "waterworld llm: seat ", seat, " falling back to shoal (", cause,
       ") on turn ", turnIndex
+
+  if not engine.trajectory.isNil:
+    for seat in 0 ..< sim.seatCount():
+      let intent = engine.intents[seat]
+      let action = intent.intentRecord(turnIndex, seat, sim.skimmerForSeat(seat))
+      var selected = none(string)
+      var status = asFallback
+      if intent.source == isLlm:
+        status = asAccepted
+        for receipt in attempts[seat].mitems:
+          if receipt.accepted:
+            receipt.parsedAction = action
+            selected = some(receipt.attemptId)
+      elif intent.source == isScripted:
+        var receipt = newDecisionAttempt($turnIndex & "-" & $seat & "-scripted",
+          engine.seats[seat].label, aoUnknown)
+        receipt.accepted = true
+        receipt.parsedAction = action
+        selected = some(receipt.attemptId)
+        attempts[seat].add(receipt)
+        status = asAccepted
+      engine.trajectory.recordDecision($turnIndex & "-" & $seat, $seat,
+        observations[seat],
+        attempts[seat], selected, action, status,
+        fallbackOrigin = (if status == asFallback: some("engine_scripted") else: none(string)))
 
 proc intentFor*(
   engine: var DecisionEngine, sim: SimServer, seat: int,
